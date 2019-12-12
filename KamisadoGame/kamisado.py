@@ -38,5 +38,7 @@ class Kamisado:
                 possible_moves += [(i, tower_x) for i in range(8) if (i, tower_x) not in tower_pos_set and i < tower_y]
                 sum_ = tower_y + tower_x
                 right_diagonal = [(i, sum_ - i) for i in range(8) if (i, sum_ - i) not in tower_pos_set and i < tower_y]
+                left_diagonal = [(i, 2 * tower_x - (sum_ - i)) for i in range(8) if
+                                 (i, tower_x - ((sum_ - i) - tower_x)) not in tower_pos_set and i < tower_y]
 
         return possible_moves
