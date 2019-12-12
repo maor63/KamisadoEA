@@ -27,18 +27,39 @@ class Kamisado:
     white_player_pos = {"Brown": (7, 0), "Green": (7, 1), "Red": (7, 2), "Yellow": (7, 3),
                         "Pink": (7, 4), "Purple": (7, 5), "Blue": (7, 6), "Orange": (7, 7)}
 
+    def __init__(self, black_player_pos=None, white_player_pos=None):
+        if black_player_pos and white_player_pos:
+            self.black_player_pos = black_player_pos
+            self.white_player_pos = white_player_pos
+
+
+
+    def is_legal_move(self, pos):
+        y, x = pos
+        return 0 <= y <= 7 and 0 <= x <= 7
+
     def get_possible_moves(self):
         black_tower_pos_set = set(self.black_player_pos.values())
         white_tower_pos_set = set(self.white_player_pos.values())
         tower_pos_set = black_tower_pos_set | white_tower_pos_set
-        possible_moves = []
+        possible_moves_dict = {}
         if self.current_player == Player.WHITE:
             for tower in self.tower_can_play:
+                possible_moves = []
                 tower_y, tower_x = self.white_player_pos[tower]
-                possible_moves += [(i, tower_x) for i in range(8) if (i, tower_x) not in tower_pos_set and i < tower_y]
+                possible_moves += [(i, tower_x) for i in range(8) if i < tower_y]
                 sum_ = tower_y + tower_x
-                right_diagonal = [(i, sum_ - i) for i in range(8) if (i, sum_ - i) not in tower_pos_set and i < tower_y]
-                left_diagonal = [(i, 2 * tower_x - (sum_ - i)) for i in range(8) if
-                                 (i, tower_x - ((sum_ - i) - tower_x)) not in tower_pos_set and i < tower_y]
+                # right diagonal
+                possible_moves += [(i, sum_ - i) for i in range(8) if i < tower_y]
+                # left diagonal
+                possible_moves += [(i, 2 * tower_x - (sum_ - i)) for i in range(8) if i < tower_y]
+                possible_moves = list(filter(self.is_legal_move, possible_moves))
+                possible_moves = list(filter(lambda pos: pos not in tower_pos_set, possible_moves))
+                possible_moves_dict[tower] = possible_moves
 
-        return possible_moves
+        return possible_moves_dict
+
+    def move_tower(self, color, pos):
+        pass
+        # new_black_player_pos =
+        # new_white_player_pos
