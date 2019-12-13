@@ -8,7 +8,7 @@ class Player(Enum):
 
 
 class Kamisado:
-    board = np.asarray([
+    board_layout = np.asarray([
         ["Orange", "Blue", "Purple", "Pink", "Yellow", "Red", "Green", "Brown"],
         ["Red", "Orange", "Pink", "Green", "Blue", "Yellow", "Brown", "Purple"],
         ["Green", "Pink", "Orange", "Red", "Purple", "Brown", "Yellow", "Blue"],
@@ -18,71 +18,131 @@ class Kamisado:
         ["Purple", "Brown", "Yellow", "Blue", "Green", "Pink", "Orange", "Red"],
         ["Brown", "Green", "Red", "Yellow", "Pink", "Purple", "Blue", "Orange"]
     ])
-    current_player = Player.WHITE
-    tower_can_play = ["Brown", "Green", "Red", "Yellow", "Pink", "Purple", "Blue", "Orange"]
-
-    black_player_pos = {"Orange": (0, 0), "Blue": (0, 1), "Purple": (0, 2), "Pink": (0, 3),
-                        "Yellow": (0, 4), "Red": (0, 5), "Green": (0, 6), "Brown": (0, 7)}
-
-    white_player_pos = {"Brown": (7, 0), "Green": (7, 1), "Red": (7, 2), "Yellow": (7, 3),
-                        "Pink": (7, 4), "Purple": (7, 5), "Blue": (7, 6), "Orange": (7, 7)}
 
     def __init__(self, black_player_pos=None, white_player_pos=None, current_player=None, tower_can_play=None):
-        if black_player_pos and white_player_pos:
-            self.black_player_pos = black_player_pos
-            self.white_player_pos = white_player_pos
-        if current_player:
-            self.current_player = current_player
-        if tower_can_play:
-            self.tower_can_play = tower_can_play
+        start_towers = ["Brown", "Green", "Red", "Yellow", "Pink", "Purple", "Blue", "Orange"]
+
+        start_black_player_pos = {"Orange": (0, 0), "Blue": (0, 1), "Purple": (0, 2), "Pink": (0, 3),
+                                  "Yellow": (0, 4), "Red": (0, 5), "Green": (0, 6), "Brown": (0, 7)}
+
+        start_white_player_pos = {"Brown": (7, 0), "Green": (7, 1), "Red": (7, 2), "Yellow": (7, 3),
+                                  "Pink": (7, 4), "Purple": (7, 5), "Blue": (7, 6), "Orange": (7, 7)}
+
+        self.black_player_pos = black_player_pos if black_player_pos else start_black_player_pos
+        self.white_player_pos = white_player_pos if white_player_pos else start_white_player_pos
+        self.current_player = current_player if current_player else Player.WHITE
+        self.tower_can_play = tower_can_play if tower_can_play else start_towers
+        self.tower_pos_set = set(self.black_player_pos.values()) | set(self.white_player_pos.values())
 
     def is_legal_move(self, pos):
         y, x = pos
-        return 0 <= y <= 7 and 0 <= x <= 7
+        return 0 <= y <= 7 and 0 <= x <= 7 and pos not in self.tower_pos_set
 
     def get_possible_moves(self):
-        black_tower_pos_set = set(self.black_player_pos.values())
-        white_tower_pos_set = set(self.white_player_pos.values())
-        tower_pos_set = black_tower_pos_set | white_tower_pos_set
-        possible_moves_dict = {}
         if self.current_player == Player.WHITE:
-            for tower in self.tower_can_play:
-                possible_moves = []
-                tower_y, tower_x = self.white_player_pos[tower]
-                possible_moves += [(i, tower_x) for i in range(8) if i < tower_y]
-                sum_ = tower_y + tower_x
-                # right diagonal
-                possible_moves += [(i, sum_ - i) for i in range(8) if i < tower_y]
-                # left diagonal
-                possible_moves += [(i, 2 * tower_x - (sum_ - i)) for i in range(8) if i < tower_y]
-                possible_moves = list(filter(self.is_legal_move, possible_moves))
-                possible_moves = list(filter(lambda pos: pos not in tower_pos_set, possible_moves))
-                possible_moves_dict[tower] = possible_moves
+            player_pos_dict = self.white_player_pos
         else:
-            for tower in self.tower_can_play:
-                possible_moves = []
-                tower_y, tower_x = self.white_player_pos[tower]
-                possible_moves += [(i, tower_x) for i in range(8) if i > tower_y]
-                sum_ = tower_y + tower_x
-                # right diagonal
-                possible_moves += [(i, sum_ - i) for i in range(8) if i > tower_y]
-                # left diagonal
-                possible_moves += [(i, 2 * tower_x - (sum_ - i)) for i in range(8) if i > tower_y]
-                possible_moves = list(filter(self.is_legal_move, possible_moves))
-                possible_moves = list(filter(lambda pos: pos not in tower_pos_set, possible_moves))
-                possible_moves_dict[tower] = possible_moves
+            player_pos_dict = self.black_player_pos
 
+        possible_moves_dict = {}
+        for tower in self.tower_can_play:
+            tower_y, tower_x = player_pos_dict[tower]
+            forward_moves = self.generate_forward(tower_x, tower_y)
+            right_moves = self.generate_right(tower_x, tower_y)
+            left_moves = self.generate_left(tower_x, tower_y)
+
+            possible_moves = forward_moves + right_moves + left_moves
+
+            possible_moves = list(filter(self.is_legal_move, possible_moves))
+            possible_moves = possible_moves if possible_moves else [None]
+            possible_moves_dict[tower] = possible_moves
         return possible_moves_dict
 
+    def generate_forward(self, tower_x, tower_y):
+        forward_block, forward_moves = self.generate_moves_and_block_list(lambda i: (i, tower_x))
+        forward_moves = self.filter_moves(forward_block, forward_moves, tower_y)
+        return forward_moves
+
+    def generate_right(self, tower_x, tower_y):
+        sum_ = tower_y + tower_x
+        right_block, right_moves = self.generate_moves_and_block_list(lambda i: (i, sum_ - i))
+        right_moves = self.filter_moves(right_block, right_moves, tower_y)
+        return right_moves
+
+    def generate_left(self, tower_x, tower_y):
+        sum_ = tower_y + tower_x
+        left_block, left_moves = self.generate_moves_and_block_list(lambda i: (i, 2 * tower_x - (sum_ - i)))
+        left_moves = self.filter_moves(left_block, left_moves, tower_y)
+        return left_moves
+
+    def filter_moves(self, block_list, moves, tower_y):
+        if self.current_player == Player.WHITE:
+            return self.filer_moves_for_white(block_list, moves, tower_y)
+        else:
+            return self.filer_moves_for_black(block_list, moves, tower_y)
+
+    def filer_moves_for_white(self, block_list, moves, tower_y):
+        block_list = list(filter(lambda pos: pos[0] < tower_y, block_list))
+        if block_list:
+            min_y = max(list(zip(*block_list))[0])
+        else:
+            min_y = -1
+        moves = list(filter(lambda pos: min_y < pos[0] < tower_y, moves))
+        return moves
+
+    def filer_moves_for_black(self, block_list, moves, tower_y):
+        block_list = list(filter(lambda pos: pos[0] > tower_y, block_list))
+        if block_list:
+            max_y = min(list(zip(*block_list))[0])
+        else:
+            max_y = 8
+        moves = list(filter(lambda pos: max_y > pos[0] > tower_y, moves))
+        return moves
+
+    def generate_moves_and_block_list(self, move_builder):
+        block_list = []
+        moves = []
+        for i in range(8):
+            move = move_builder(i)
+            if move in self.tower_pos_set:
+                block_list.append(move)
+            else:
+                moves.append(move)
+        return block_list, moves
+
+    def _generate_moves_for_tower(self, tower_x, tower_y, move_restriction):
+        possible_moves = []
+        possible_moves += [(i, tower_x) for i in range(8)]
+        sum_ = tower_y + tower_x
+        # right diagonal
+        possible_moves += [(i, sum_ - i) for i in range(8)]
+        # left diagonal
+        possible_moves += [(i, 2 * tower_x - (sum_ - i)) for i in range(8)]
+        possible_moves = list(filter(self.is_legal_move, possible_moves))
+        possible_moves = list(filter(move_restriction, possible_moves))
+        return possible_moves
+
     def move_tower(self, tower, pos):
-        assert isinstance(pos, tuple)
+        assert isinstance(pos, tuple) or pos is None
         new_black_player_pos = dict(self.black_player_pos)
         new_white_player_pos = dict(self.white_player_pos)
         if self.current_player == Player.WHITE:
+            pos = pos if pos else new_white_player_pos[tower]
             new_white_player_pos[tower] = pos
             current_player = Player.BLACK
         else:
+            pos = pos if pos else new_black_player_pos[tower]
             new_black_player_pos[tower] = pos
             current_player = Player.WHITE
-        # tower_can_play = [boa]
-        return Kamisado(new_black_player_pos, new_white_player_pos, current_player)
+        tower_can_play = [self.board_layout[pos]]
+        return Kamisado(new_black_player_pos, new_white_player_pos, current_player, tower_can_play)
+
+    def is_game_won(self):
+        is_white_won = any([pos[0] == 0 for tower, pos in self.white_player_pos.items()])
+        is_black_won = any([pos[0] == 7 for tower, pos in self.black_player_pos.items()])
+        if is_white_won:
+            return Player.WHITE
+        elif is_black_won:
+            return Player.BLACK
+        else:
+            return None
