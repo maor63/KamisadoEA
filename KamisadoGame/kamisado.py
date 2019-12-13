@@ -146,3 +146,12 @@ class Kamisado:
             return Player.BLACK
         else:
             return None
+
+    def __str__(self):
+        board_current_layout = np.chararray((8, 8))
+        board_current_layout[:] = ' '
+        for tower, pos in self.white_player_pos.items():
+            board_current_layout[pos] = 'W'
+        for tower, pos in self.black_player_pos.items():
+            board_current_layout[pos] = 'B'
+        return str(board_current_layout)
