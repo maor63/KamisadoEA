@@ -1,3 +1,4 @@
+import time
 from unittest import TestCase
 
 from KamisadoGame.kamisado import Kamisado
@@ -17,6 +18,8 @@ class TestRandomAgent(TestCase):
             tower, move = player.play(board)
             board = board.move_tower(tower, move)
             none_count = none_count + 1 if not move else none_count
+            print(board)
+            time.sleep(5)
         print(f'Player {board.is_game_won()} won')
         print(board)
 

@@ -1,3 +1,6 @@
+import random
+from itertools import chain
+
 import numpy as np
 from enum import Enum
 
@@ -30,6 +33,7 @@ class Kamisado:
 
         self.black_player_pos = black_player_pos if black_player_pos else start_black_player_pos
         self.white_player_pos = white_player_pos if white_player_pos else start_white_player_pos
+        self.player_pos = {Player.WHITE: self.white_player_pos, Player.BLACK: self.black_player_pos}
         self.current_player = current_player if current_player else Player.WHITE
         self.tower_can_play = tower_can_play if tower_can_play else start_towers
         self.tower_pos_set = set(self.black_player_pos.values()) | set(self.white_player_pos.values())
@@ -39,11 +43,7 @@ class Kamisado:
         return 0 <= y <= 7 and 0 <= x <= 7 and pos not in self.tower_pos_set
 
     def get_possible_moves(self):
-        if self.current_player == Player.WHITE:
-            player_pos_dict = self.white_player_pos
-        else:
-            player_pos_dict = self.black_player_pos
-
+        player_pos_dict = self.player_pos[self.current_player]
         possible_moves_dict = {}
         for tower in self.tower_can_play:
             tower_y, tower_x = player_pos_dict[tower]
@@ -124,6 +124,15 @@ class Kamisado:
 
     def move_tower(self, tower, pos):
         assert isinstance(pos, tuple) or pos is None
+        possible_moves = self.get_possible_moves()
+        if tower not in possible_moves or pos not in set(chain(*possible_moves.values())):
+            tower = random.choice(list(possible_moves.keys()))
+            pos = random.choice(list(possible_moves[tower]))
+            return self._move_tower_to_pos(pos, tower)
+        else:
+            return self._move_tower_to_pos(pos, tower)
+
+    def _move_tower_to_pos(self, pos, tower):
         new_black_player_pos = dict(self.black_player_pos)
         new_white_player_pos = dict(self.white_player_pos)
         if self.current_player == Player.WHITE:
@@ -148,10 +157,9 @@ class Kamisado:
             return None
 
     def __str__(self):
-        board_current_layout = np.chararray((8, 8))
-        board_current_layout[:] = ' '
+        board_current_layout = np.array([[''] * 8] * 8)
         for tower, pos in self.white_player_pos.items():
-            board_current_layout[pos] = 'W'
+            board_current_layout[pos] = f'W_{tower}'
         for tower, pos in self.black_player_pos.items():
-            board_current_layout[pos] = 'B'
+            board_current_layout[pos] = f'B_{tower}'
         return str(board_current_layout)
