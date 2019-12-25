@@ -33,46 +33,77 @@ class Kamisado:
 
         self.black_player_pos = black_player_pos if black_player_pos else start_black_player_pos
         self.white_player_pos = white_player_pos if white_player_pos else start_white_player_pos
-        self.player_pos = {Player.WHITE: self.white_player_pos, Player.BLACK: self.black_player_pos}
+        self.players_pos = {Player.WHITE: self.white_player_pos, Player.BLACK: self.black_player_pos}
         self.current_player = current_player if current_player else Player.WHITE
         self.tower_can_play = tower_can_play if tower_can_play else start_towers
         self.tower_pos_set = set(self.black_player_pos.values()) | set(self.white_player_pos.values())
+        self.possible_moves_dict = None
 
     def is_legal_move(self, pos):
         y, x = pos
         return 0 <= y <= 7 and 0 <= x <= 7 and pos not in self.tower_pos_set
 
     def get_possible_moves(self):
-        player_pos_dict = self.player_pos[self.current_player]
-        possible_moves_dict = {}
-        for tower in self.tower_can_play:
-            tower_y, tower_x = player_pos_dict[tower]
-            forward_moves = self.generate_forward(tower_x, tower_y)
-            right_moves = self.generate_right(tower_x, tower_y)
-            left_moves = self.generate_left(tower_x, tower_y)
+        if self.possible_moves_dict:
+            return self.possible_moves_dict
+        else:
+            player_pos_dict = self.players_pos[self.current_player]
+            possible_moves_dict = {}
+            for tower in self.tower_can_play:
+                tower_y, tower_x = player_pos_dict[tower]
+                forward_moves = self.generate_forward(tower_x, tower_y)
+                right_moves = self.generate_right(tower_x, tower_y)
+                left_moves = self.generate_left(tower_x, tower_y)
 
-            possible_moves = forward_moves + right_moves + left_moves
+                possible_moves = forward_moves + right_moves + left_moves
 
-            possible_moves = list(filter(self.is_legal_move, possible_moves))
-            possible_moves = possible_moves if possible_moves else [None]
-            possible_moves_dict[tower] = possible_moves
-        return possible_moves_dict
+                # possible_moves = list(filter(self.is_legal_move, possible_moves))
+                possible_moves = possible_moves if possible_moves else [None]
+                possible_moves_dict[tower] = possible_moves
+
+            self.possible_moves_dict = possible_moves_dict
+            return possible_moves_dict
 
     def generate_forward(self, tower_x, tower_y):
-        forward_block, forward_moves = self.generate_moves_and_block_list(lambda i: (i, tower_x))
-        forward_moves = self.filter_moves(forward_block, forward_moves, tower_y)
+        forward_moves = []
+        for i in range(1, 8):
+            if self.current_player == Player.WHITE:
+                forward_move = (tower_y - i, tower_x)
+            else:
+                forward_move = (tower_y + i, tower_x)
+
+            if self.is_legal_move(forward_move):
+                forward_moves.append(forward_move)
+            else:
+                break
         return forward_moves
 
     def generate_right(self, tower_x, tower_y):
-        sum_ = tower_y + tower_x
-        right_block, right_moves = self.generate_moves_and_block_list(lambda i: (i, sum_ - i))
-        right_moves = self.filter_moves(right_block, right_moves, tower_y)
+        right_moves = []
+        for i in range(1, 8):
+            if self.current_player == Player.WHITE:
+                right_move = (tower_y - i, tower_x + i)
+            else:
+                right_move = (tower_y + i, tower_x - i)
+
+            if self.is_legal_move(right_move):
+                right_moves.append(right_move)
+            else:
+                break
         return right_moves
 
     def generate_left(self, tower_x, tower_y):
-        sum_ = tower_y + tower_x
-        left_block, left_moves = self.generate_moves_and_block_list(lambda i: (i, 2 * tower_x - (sum_ - i)))
-        left_moves = self.filter_moves(left_block, left_moves, tower_y)
+        left_moves = []
+        for i in range(1, 8):
+            if self.current_player == Player.WHITE:
+                left_move = (tower_y - i, tower_x - i)
+            else:
+                left_move = (tower_y + i, tower_x + i)
+
+            if self.is_legal_move(left_move):
+                left_moves.append(left_move)
+            else:
+                break
         return left_moves
 
     def filter_moves(self, block_list, moves, tower_y):

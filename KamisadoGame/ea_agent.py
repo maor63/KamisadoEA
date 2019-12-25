@@ -32,7 +32,7 @@ def orderByTowerProgress(board, moves_tuples):
             tower, move = move_tuple
             new_board = board.move_tower(tower, move)
             tower_places = np.zeros((8, 8))
-            player_positions = new_board.player_pos[player]
+            player_positions = new_board.players_pos[player]
             for pos in player_positions.values():
                 tower_places[pos] = 1
             if Player.WHITE == player:
@@ -224,13 +224,13 @@ def kamisado_simulator(p1_play_move, p2_play_move):
     return board.is_game_won(), i
 
 
-def evalSolver(individual):
+def evalSolver(individual, games=10):
     start = timeit.default_timer()
     ea_play_move = toolbox.compile(expr=individual)
     # print(individual)
     games_won = 0
     won_moves_count = 0
-    for i in range(10):
+    for i in range(games):
         res, moves_count = kamisado_simulator(ea_play_move, random_player.play)
         if res == Player.WHITE:
             games_won += 1
@@ -348,3 +348,5 @@ hof = tools.HallOfFame(1)
 pop, logbook = algorithms.eaSimple(pop, toolbox, 0.7, 0.01, 100, stats=mstats,
                                    halloffame=hof, verbose=True)
 print(hof[0])
+
+print(f'games won {evalSolver(hof[0])}')
