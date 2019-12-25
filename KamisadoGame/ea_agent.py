@@ -22,13 +22,14 @@ def if_then_else(condition, out1, out2):
     return out1 if condition else out2
 
 
-def orderByTowerProgress(board):
+def orderByTowerProgress(board, moves_tuples):
     assert isinstance(board, Kamisado)
     player = board.current_player
     possible_moves = board.get_possible_moves()
     ordered_moves = Counter()
-    for tower, moves_tuples in possible_moves.items():
-        for move in moves_tuples:
+    if moves_tuples:
+        for move_tuple in moves_tuples:
+            tower, move = move_tuple
             new_board = board.move_tower(tower, move)
             tower_places = np.zeros((8, 8))
             player_positions = new_board.player_pos[player]
@@ -38,8 +39,11 @@ def orderByTowerProgress(board):
                 ordered_moves[(tower, move)] = tower_places[:4].sum()
             else:
                 ordered_moves[(tower, move)] = tower_places[4:].sum()
-    moves_tuples = [x[0] for x in ordered_moves.most_common(len(ordered_moves))]
-    return moves_tuples
+        ordered_moves_tuples = [x[0] for x in ordered_moves.most_common(len(ordered_moves))]
+        return ordered_moves_tuples
+    else:
+        return moves_tuples
+
 
 
 # def orderByStrikingPostionCount(board):
@@ -239,8 +243,8 @@ def evalSolver(individual):
     end = timeit.default_timer()
     # print('\rEval time {0:.5} sec'.format(str(end - start)), end='')
     # return score_board[str(individual)],
-    # return games_won, won_moves_count
-    return games_won,
+    return games_won, won_moves_count
+    # return games_won,
 
 
 def getBoard(board):
@@ -280,7 +284,7 @@ def get_score_from_result(res1):
 
 pset = gp.PrimitiveSetTyped("main", [Kamisado], tuple)
 pset.addPrimitive(getBoard, [Kamisado], Kamisado)
-pset.addPrimitive(orderByTowerProgress, [Kamisado], list)
+pset.addPrimitive(orderByTowerProgress, [Kamisado, list], list)
 # pset.addPrimitive(orderByStrikingPostionCount, [Kamisado], list)
 pset.addPrimitive(orderByOpenStrikingPostions, [Kamisado, list], list)
 # pset.addPrimitive(orderByNumOfPossibleMoves, [Kamisado], list)
@@ -309,7 +313,7 @@ pset.addTerminal((), tuple)
 pset.renameArguments(ARG0="Board")
 # pset.addTerminal(Kamisado(), Kamisado)
 
-creator.create("FitnessMin", base.Fitness, weights=(1.0,))
+creator.create("FitnessMin", base.Fitness, weights=(1.0, -1.0))
 creator.create("Individual", gp.PrimitiveTree, fitness=creator.FitnessMin)
 
 toolbox = base.Toolbox()
@@ -328,19 +332,19 @@ toolbox.register("mutate", gp.mutUniform, expr=toolbox.expr_mut, pset=pset)
 toolbox.decorate("mate", gp.staticLimit(key=operator.attrgetter("height"), max_value=max_))
 toolbox.decorate("mutate", gp.staticLimit(key=operator.attrgetter("height"), max_value=max_))
 
-wins_stats = tools.Statistics(lambda ind: ind.fitness.values)
-# move_count_stats = tools.Statistics(lambda ind: ind.fitness.values[1])
-# mstats = tools.MultiStatistics(wins_stats=wins_stats, move_count_stats=move_count_stats)
-mstats = wins_stats
+wins_stats = tools.Statistics(lambda ind: ind.fitness.values[0])
+move_count_stats = tools.Statistics(lambda ind: ind.fitness.values[1])
+mstats = tools.MultiStatistics(wins_stats=wins_stats, move_count_stats=move_count_stats)
+# mstats = wins_stats
 mstats.register("Avg", np.mean)
 mstats.register("Std", np.std)
 mstats.register("Median", np.median)
 mstats.register("Min", np.min)
 mstats.register("Max", np.max)
 
-pop = toolbox.population(n=100)
+pop = toolbox.population(n=10)
 hof = tools.HallOfFame(1)
 
-pop, logbook = algorithms.eaSimple(pop, toolbox, 0.7, 0.01, 2, stats=mstats,
+pop, logbook = algorithms.eaSimple(pop, toolbox, 0.7, 0.01, 100, stats=mstats,
                                    halloffame=hof, verbose=True)
 print(hof[0])
