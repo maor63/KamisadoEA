@@ -147,25 +147,25 @@ def get_gp_play_move(gp_policy):
     return gp_play_move
 
 
-def kamisado_simulator(p1_play_move, p2_play_move):
+def kamisado_simulator(p1_play_move, p2_play_move, max_steps_num=10000):
     board = Kamisado()
     players = [p1_play_move, p2_play_move]
     none_count = 0
     i = 0
     # while not board.is_game_won() and none_count < 10:
-    for i in range(10000):
+    for i in range(max_steps_num):
         play_move = players[i % len(players)]
         move_tuple = play_move(board)
         move_tuple = move_tuple if move_tuple != () else random_player.play(board)
         tower, move = move_tuple
         board = board.move_tower(tower, move)
         none_count = none_count + 1 if not move else none_count
-        if board.is_game_won() and none_count >= 10:
+        if board.is_game_won() or none_count >= 10:
             break
     return board.is_game_won(), i
 
 
-def evalSolver(individual, games=10):
+def evalSolver(individual, games=5):
     start = timeit.default_timer()
     gp_policy = toolbox.compile(expr=individual)
 
@@ -173,32 +173,39 @@ def evalSolver(individual, games=10):
     # print(individual)
     games_won = 0
     games_lost = 0
+    games_tie = 0
     won_moves_count = []
     lose_moves_count = []
+    max_steps_num = 100
     for i in range(games):
-        # res, moves_count = kamisado_simulator(ea_play_move, random_player.play)
-        # if res == Player.WHITE:
-        #     games_won += 1
-        #     won_moves_count.append(moves_count)
-        # else:
-        #     games_lost += 1
-        #     lose_moves_count.append(moves_count)
+        res, moves_count = kamisado_simulator(ea_play_move, random_player.play, max_steps_num)
+        if res == Player.WHITE:
+            games_won += 1
+            won_moves_count.append(moves_count)
+        elif res == Player.BLACK:
+            games_lost += 1
+            lose_moves_count.append(moves_count)
+        else:
+            games_tie += 1
 
-        res, moves_count = kamisado_simulator(random_player.play, ea_play_move)
+        res, moves_count = kamisado_simulator(random_player.play, ea_play_move, max_steps_num)
         if res == Player.BLACK:
             games_won += 1
             won_moves_count.append(moves_count)
-        else:
+        elif res == Player.WHITE:
             games_lost += 1
             lose_moves_count.append(moves_count)
+        else:
+            games_tie += 1
+
     end = timeit.default_timer()
     # print('\rEval time {0:.5} sec'.format(str(end - start)), end='')
     # return score_board[str(individual)],
     # return games_won, won_moves_count
-    won_moves_avg = np.mean(won_moves_count) if won_moves_count else 100
-    lose_moves_avg = np.mean(lose_moves_count) if lose_moves_count else 100
+    won_moves_avg = np.mean(won_moves_count) if won_moves_count else max_steps_num
+    lose_moves_avg = np.mean(lose_moves_count) if lose_moves_count else max_steps_num
     tree_length = len(individual)
-    return games_won, won_moves_avg, lose_moves_avg, tree_length
+    return games_won, won_moves_avg, lose_moves_avg, tree_length, games_tie
 
 
 def getMove(move_tuple):
@@ -213,20 +220,20 @@ def protectedDiv(left, right):
 
 
 def selAgentTournament(individuals, k, tournsize):
-    assert tournsize % 2 == 0
     chosen = []
     for i in range(k):
-        aspirants = selRandom(individuals, tournsize)
-        while aspirants:
+        aspirants = random.sample(individuals, tournsize)
+        while len(aspirants) > 1:
             random.shuffle(aspirants)
             p1, p2 = aspirants.pop(), aspirants.pop()
             p1_move = get_playe_move_from_policy(p1)
             p2_move = get_playe_move_from_policy(p2)
             res, moves_count = kamisado_simulator(p1_move, p2_move)
             if res == Player.WHITE:
-                chosen.append(p1)
+                aspirants.append(p1)
             else:
-                chosen.append(p2)
+                aspirants.append(p2)
+        chosen += aspirants
     return chosen
 
 
@@ -234,6 +241,27 @@ def get_playe_move_from_policy(p1):
     gp_policy = toolbox.compile(expr=p1)
     p1_move = get_gp_play_move(gp_policy)
     return p1_move
+
+
+def get_score_for_two_players(p1_move, p2_move):
+    score = [0, 0, 0]
+    for i in range(100):
+        res, moves_count = kamisado_simulator(p1_move, p2_move)
+        if res == Player.WHITE:
+            score[0] += 1
+        elif res == Player.BLACK:
+            score[2] += 1
+        else:
+            score[1] += 1
+
+        res, moves_count = kamisado_simulator(p2_move, p1_move)
+        if res == Player.WHITE:
+            score[2] += 1
+        elif res == Player.BLACK:
+            score[0] += 1
+        else:
+            score[1] += 1
+    return score
 
 
 pset = gp.PrimitiveSetTyped("main", [Kamisado, tuple], float)
@@ -272,7 +300,7 @@ pset.renameArguments(ARG0="Board")
 pset.renameArguments(ARG1="move_tuple")
 # pset.addTerminal(Kamisado(), Kamisado)
 
-creator.create("FitnessMax", base.Fitness, weights=(2.0, -1.0, 1.0, -1.0))
+creator.create("FitnessMax", base.Fitness, weights=(2.0, -1.0, 1.0, -1.0, -1.0))
 creator.create("Individual", gp.PrimitiveTree, fitness=creator.FitnessMax)
 
 toolbox = base.Toolbox()
@@ -283,7 +311,7 @@ toolbox.register("individual", tools.initIterate, creator.Individual, toolbox.ex
 toolbox.register("population", tools.initRepeat, list, toolbox.individual)
 toolbox.register("compile", gp.compile, pset=pset)
 toolbox.register("evaluate", evalSolver)
-toolbox.register("select", selAgentTournament, tournsize=6)
+toolbox.register("select", selAgentTournament, tournsize=2)
 # toolbox.register("select", tools.selTournament, tournsize=6)
 toolbox.register("mate", gp.cxOnePoint)
 toolbox.register("expr_mut", gp.genHalfAndHalf, min_=2, max_=max_)
@@ -296,8 +324,9 @@ games_won = tools.Statistics(lambda ind: ind.fitness.values[0])
 avg_move_to_win = tools.Statistics(lambda ind: ind.fitness.values[1])
 # avg_move_to_lose = tools.Statistics(lambda ind: ind.fitness.values[2])
 # tree_len = tools.Statistics(lambda ind: ind.fitness.values[3])
+avg_game_tie = tools.Statistics(lambda ind: ind.fitness.values[4])
 # mstats = tools.MultiStatistics(games_won=games_won, avg_move_to_win=avg_move_to_win, avg_move_to_lose=avg_move_to_lose, tree_len=tree_len)
-mstats = tools.MultiStatistics(games_won=games_won, avg_move_to_win=avg_move_to_win)
+mstats = tools.MultiStatistics(games_won=games_won, avg_move_to_win=avg_move_to_win, avg_game_tie=avg_game_tie)
 # mstats = wins_stats
 mstats.register("Avg", np.mean)
 mstats.register("Std", np.std)
@@ -305,10 +334,18 @@ mstats.register("Median", np.median)
 mstats.register("Min", np.min)
 mstats.register("Max", np.max)
 
-pop = toolbox.population(n=1000)
-hof = tools.HallOfFame(1)
+pop = toolbox.population(n=100)
+hof = tools.HallOfFame(3)
 
 random.seed(seed)
 pop, logbook = algorithms.eaSimple(pop, toolbox, 0.7, 0.001, 100, stats=mstats,
                                    halloffame=hof, verbose=True)
 print(hof[0])
+p1_move = get_playe_move_from_policy(hof[0])
+p2_move = get_playe_move_from_policy(hof[1])
+
+score1 = get_score_for_two_players(p1_move, p1_move)
+print(f'p1 VS p1 score: {score1}')
+
+score2 = get_score_for_two_players(p1_move, p2_move)
+print(f'p1 VS p2 score: {score2}')

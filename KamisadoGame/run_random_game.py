@@ -9,7 +9,7 @@ p2 = RandomAgent()
 
 players = [p1, p2]
 times = []
-for j in range(100):
+for j in range(10000):
     start = timeit.default_timer()
     pass
     none_count = 0
