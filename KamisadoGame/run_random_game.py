@@ -1,15 +1,18 @@
 import time
 import timeit
 import numpy as np
-from KamisadoGame.kamisado import Kamisado
+
+from KamisadoGame.TowerProgressAgent import TowerProgressAgent
+from KamisadoGame.kamisado import Kamisado, Player
 from KamisadoGame.random_agent import RandomAgent
 
 p1 = RandomAgent()
-p2 = RandomAgent()
+p2 = TowerProgressAgent()
 
 players = [p1, p2]
 times = []
-for j in range(10000):
+score = [0, 0, 0]
+for j in range(100):
     start = timeit.default_timer()
     pass
     none_count = 0
@@ -20,9 +23,17 @@ for j in range(10000):
         tower, move = player.play(board)
         board = board.move_tower(tower, move)
         none_count = none_count + 1 if not move else none_count
+        i += 1
         # print(board)
     print(f'Player {board.is_game_won()} won')
+    if board.is_game_won() == Player.WHITE:
+        score[0] += 1
+    elif board.is_game_won() == Player.BLACK:
+        score[2] += 1
+    else:
+        score[1] += 1
     end = timeit.default_timer()
     times.append(end-start)
 print(f'Avg game time {np.mean(times)} sec')
 print(f'Sum game time {np.sum(times)} sec')
+print(score)
