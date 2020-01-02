@@ -177,6 +177,9 @@ class Kamisado:
         tower_can_play = [self.board_layout[pos]]
         return Kamisado(new_black_player_pos, new_white_player_pos, current_player, tower_can_play)
 
+    def clone(self):
+        return Kamisado(self.black_player_pos, self.white_player_pos, self.current_player, self.tower_can_play)
+
     def is_game_won(self):
         is_white_won = any([pos[0] == 0 for tower, pos in self.white_player_pos.items()])
         is_black_won = any([pos[0] == 7 for tower, pos in self.black_player_pos.items()])

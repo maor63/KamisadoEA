@@ -4,8 +4,11 @@ from KamisadoGame.kamisado import Kamisado
 from collections import Counter
 
 
-class AbstractSmartAgent(ABC):
+class MinMaxAgent(ABC):
     MAX, MIN = 1000, -1000
+
+    def __init__(self, max_depth=3):
+        self._max_depth = max_depth
 
     def play(self, board):
         assert isinstance(board, Kamisado)
@@ -14,7 +17,7 @@ class AbstractSmartAgent(ABC):
         for tower, possible_moves in towers_possible_moves.items():
             for possible_move in possible_moves:
                 new_board = board.move_tower(tower, possible_move)
-                minimax_val = self.minimax(0, new_board, False, self.MIN, self.MAX, 3, board.current_player)
+                minimax_val = self.minimax(0, new_board, False, self.MIN, self.MAX, self._max_depth, board.current_player)
                 moves_estimation_dict[(tower, possible_move)] = minimax_val
 
         tower, move = moves_estimation_dict.most_common(1)[0][0]
