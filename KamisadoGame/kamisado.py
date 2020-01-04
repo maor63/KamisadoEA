@@ -11,25 +11,32 @@ class Player(Enum):
 
 
 class Kamisado:
-    board_layout = np.asarray([
-        ["Orange", "Blue", "Purple", "Pink", "Yellow", "Red", "Green", "Brown"],
-        ["Red", "Orange", "Pink", "Green", "Blue", "Yellow", "Brown", "Purple"],
-        ["Green", "Pink", "Orange", "Red", "Purple", "Brown", "Yellow", "Blue"],
-        ["Pink", "Purple", "Blue", "Orange", "Brown", "Green", "Red", "Yellow"],
-        ["Yellow", "Red", "Green", "Brown", "Orange", "Blue", "Purple", "Pink"],
-        ["Blue", "Yellow", "Brown", "Purple", "Red", "Orange", "Pink", "Green"],
-        ["Purple", "Brown", "Yellow", "Blue", "Green", "Pink", "Orange", "Red"],
-        ["Brown", "Green", "Red", "Yellow", "Pink", "Purple", "Blue", "Orange"]
-    ])
-
-    def __init__(self, black_player_pos=None, white_player_pos=None, current_player=None, tower_can_play=None):
+    def __init__(self, black_player_pos=None, white_player_pos=None, current_player=None, tower_can_play=None,
+                 init_board=None):
+        self.board_layout = np.asarray([
+            ["Orange", "Blue", "Purple", "Pink", "Yellow", "Red", "Green", "Brown"],
+            ["Red", "Orange", "Pink", "Green", "Blue", "Yellow", "Brown", "Purple"],
+            ["Green", "Pink", "Orange", "Red", "Purple", "Brown", "Yellow", "Blue"],
+            ["Pink", "Purple", "Blue", "Orange", "Brown", "Green", "Red", "Yellow"],
+            ["Yellow", "Red", "Green", "Brown", "Orange", "Blue", "Purple", "Pink"],
+            ["Blue", "Yellow", "Brown", "Purple", "Red", "Orange", "Pink", "Green"],
+            ["Purple", "Brown", "Yellow", "Blue", "Green", "Pink", "Orange", "Red"],
+            ["Brown", "Green", "Red", "Yellow", "Pink", "Purple", "Blue", "Orange"]
+        ])
         start_towers = ["Brown", "Green", "Red", "Yellow", "Pink", "Purple", "Blue", "Orange"]
 
-        start_black_player_pos = {"Orange": (0, 0), "Blue": (0, 1), "Purple": (0, 2), "Pink": (0, 3),
-                                  "Yellow": (0, 4), "Red": (0, 5), "Green": (0, 6), "Brown": (0, 7)}
+        if init_board:
+            assert len(set(init_board)) == 8
+            self.board_layout = self.board_layout[init_board]
+        self.init_board = init_board
 
-        start_white_player_pos = {"Brown": (7, 0), "Green": (7, 1), "Red": (7, 2), "Yellow": (7, 3),
-                                  "Pink": (7, 4), "Purple": (7, 5), "Blue": (7, 6), "Orange": (7, 7)}
+        start_black_player_pos = {color: (0, i) for i, color in enumerate(self.board_layout[0])}
+        start_white_player_pos = {color: (7, i) for i, color in enumerate(self.board_layout[7])}
+        # start_black_player_pos = {"Orange": (0, 0), "Blue": (0, 1), "Purple": (0, 2), "Pink": (0, 3),
+        #                           "Yellow": (0, 4), "Red": (0, 5), "Green": (0, 6), "Brown": (0, 7)}
+        #
+        # start_white_player_pos = {"Brown": (7, 0), "Green": (7, 1), "Red": (7, 2), "Yellow": (7, 3),
+        #                           "Pink": (7, 4), "Purple": (7, 5), "Blue": (7, 6), "Orange": (7, 7)}
 
         self.black_player_pos = black_player_pos if black_player_pos else start_black_player_pos
         self.white_player_pos = white_player_pos if white_player_pos else start_white_player_pos
@@ -175,10 +182,11 @@ class Kamisado:
             new_black_player_pos[tower] = pos
             current_player = Player.WHITE
         tower_can_play = [self.board_layout[pos]]
-        return Kamisado(new_black_player_pos, new_white_player_pos, current_player, tower_can_play)
+        return Kamisado(new_black_player_pos, new_white_player_pos, current_player, tower_can_play, self.init_board)
 
     def clone(self):
-        return Kamisado(self.black_player_pos, self.white_player_pos, self.current_player, self.tower_can_play)
+        return Kamisado(self.black_player_pos, self.white_player_pos, self.current_player, self.tower_can_play,
+                        self.init_board)
 
     def is_game_won(self):
         is_white_won = any([pos[0] == 0 for tower, pos in self.white_player_pos.items()])

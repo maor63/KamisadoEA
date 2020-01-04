@@ -4,6 +4,24 @@ from KamisadoGame.kamisado import Kamisado, Player
 
 
 class TestKamisado(TestCase):
+    def test_init_kamisado_with_random_board(self):
+        board = Kamisado()
+        start_black_player_pos = {"Orange": (0, 0), "Blue": (0, 1), "Purple": (0, 2), "Pink": (0, 3),
+                                  "Yellow": (0, 4), "Red": (0, 5), "Green": (0, 6), "Brown": (0, 7)}
+        start_white_player_pos = {"Brown": (7, 0), "Green": (7, 1), "Red": (7, 2), "Yellow": (7, 3),
+                                  "Pink": (7, 4), "Purple": (7, 5), "Blue": (7, 6), "Orange": (7, 7)}
+        self.assertDictEqual(start_white_player_pos, board.white_player_pos)
+        self.assertDictEqual(start_black_player_pos, board.black_player_pos)
+
+        init_board = [2, 0, 1, 6, 4, 7, 5, 3]
+        board = Kamisado(init_board=init_board)
+        start_black_player_pos = {"Green": (0, 0), "Pink": (0, 1), "Orange": (0, 2), "Red": (0, 3),
+                                  "Purple": (0, 4), "Brown": (0, 5), "Yellow": (0, 6), "Blue": (0, 7)}
+        start_white_player_pos = {"Pink": (7, 0), "Purple": (7, 1), "Blue": (7, 2), "Orange": (7, 3),
+                                  "Brown": (7, 4), "Green": (7, 5), "Red": (7, 6), "Yellow": (7, 7)}
+        self.assertDictEqual(start_white_player_pos, board.white_player_pos)
+        self.assertDictEqual(start_black_player_pos, board.black_player_pos)
+
     def test_start_game_white_moves(self):
         board = Kamisado()
         white_moves = board.get_possible_moves()

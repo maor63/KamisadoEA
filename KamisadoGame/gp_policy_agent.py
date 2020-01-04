@@ -23,6 +23,7 @@ from KamisadoGame.random_agent import RandomAgent
 seed = 10
 random.seed(seed)
 
+
 def getBoard(board):
     return board
 
@@ -155,8 +156,8 @@ def get_gp_play_move(gp_policy):
     return gp_play_move
 
 
-def kamisado_simulator(p1_play_move, p2_play_move, max_steps_num=10000):
-    board = Kamisado()
+def kamisado_simulator(p1_play_move, p2_play_move, max_steps_num=10000, init_board=None):
+    board = Kamisado(init_board=init_board)
     players = [p1_play_move, p2_play_move]
     none_count = 0
     i = 0
@@ -202,18 +203,23 @@ def evalSolver(individual, games=50):
         games_won += games_won1 + games_won2
 
     for i in range(2):
+        tower_progress_agent = TowerProgressAgent(0)
+        striking_position_agent = StrikingPositionAgent(0)
+        possible_moves_agent = PossibleMovesAgent(0)
         for agent in [tower_progress_agent, striking_position_agent, possible_moves_agent]:
             # for agent in [tower_progress_agent]:
             p2_play = agent.play
             board, moves_count = kamisado_simulator(ea_play_move, p2_play, max_steps_num)
             games_lost, games_tie, games_won1 = get_stats(board, max_steps_num, moves_count, moves_counts,
-                                                          possible_moves_list, striking_position_list, tower_progress_list,
+                                                          possible_moves_list, striking_position_list,
+                                                          tower_progress_list,
                                                           Player.WHITE)
 
             board, moves_count = kamisado_simulator(p2_play, ea_play_move, max_steps_num)
             res = board.is_game_won()
             games_lost, games_tie, games_won2 = get_stats(board, max_steps_num, moves_count, moves_counts,
-                                                          possible_moves_list, striking_position_list, tower_progress_list,
+                                                          possible_moves_list, striking_position_list,
+                                                          tower_progress_list,
                                                           Player.BLACK)
             games_won += games_won1 + games_won2
 
@@ -287,10 +293,10 @@ def get_playe_move_from_policy(p1):
     return p1_move
 
 
-def get_score_for_two_players(p1_move, p2_move, games_count=100):
+def get_score_for_two_players(p1_move, p2_move, games_count=100, init_board=None):
     score = np.array([0, 0, 0])
     for i in range(games_count):
-        board, moves_count = kamisado_simulator(p1_move, p2_move)
+        board, moves_count = kamisado_simulator(p1_move, p2_move, init_board=init_board)
         res = board.is_game_won()
         if res == Player.WHITE:
             score[0] += 1
@@ -299,7 +305,7 @@ def get_score_for_two_players(p1_move, p2_move, games_count=100):
         else:
             score[1] += 1
 
-        board, moves_count = kamisado_simulator(p2_move, p1_move)
+        board, moves_count = kamisado_simulator(p2_move, p1_move, init_board=init_board)
         res = board.is_game_won()
         if res == Player.WHITE:
             score[2] += 1
@@ -386,7 +392,7 @@ pset.renameArguments(ARG0="Board")
 pset.renameArguments(ARG1="move_tuple")
 # pset.addTerminal(Kamisado(), Kamisado)
 
-creator.create("FitnessMax", base.Fitness, weights=(2.0, 1.0, 0.5, 0.5, 0.5))
+creator.create("FitnessMax", base.Fitness, weights=(2.0, 1.0, 0.5, 1.0, 0.5))
 creator.create("Individual", gp.PrimitiveTree, fitness=creator.FitnessMax)
 
 toolbox = base.Toolbox()
@@ -400,7 +406,7 @@ toolbox.register("evaluate", evalSolver)
 # toolbox.register("select", selAgentTournament, tournsize=5)
 toolbox.register("select", tools.selTournament, tournsize=4)
 toolbox.register("mate", gp.cxOnePoint)
-toolbox.register("expr_mut", gp.genHalfAndHalf, min_=1, max_=4)
+toolbox.register("expr_mut", gp.genHalfAndHalf, min_=1, max_=7)
 toolbox.register("mutate", gp.mutUniform, expr=toolbox.expr_mut, pset=pset)
 
 toolbox.decorate("mate", gp.staticLimit(key=operator.attrgetter("height"), max_value=max_tree_length))
@@ -425,7 +431,6 @@ mstats.register("Max", np.max)
 pop = toolbox.population(n=100)
 hof = tools.HallOfFame(1)
 
-
 pop, logbook = algorithms.eaSimple(pop, toolbox, 0.7, 0.01, 50, stats=mstats,
                                    halloffame=hof, verbose=True)
 print(hof[0])
@@ -437,6 +442,8 @@ print(hof[0])
 # possible_moves_agent = PossibleMovesAgent()
 
 p1_move = get_playe_move_from_policy(hof[0])
+
+print('############################Train Data###################################')
 
 score1 = get_score_for_two_players(p1_move, p1_move)
 print(f'p1 VS p1 score: {score1}')
@@ -456,3 +463,27 @@ for i in range(4):
 
     score = get_score_for_two_players(p1_move, possible_moves_agent.play, 100)
     print(f'p1 VS possible_moves_agent score: {score}, minmax depth {i}')
+
+print('############################Test Data###################################')
+for j in range(10):
+    init_board = list(range(8))
+    random.shuffle(init_board)
+    print(f'board init {init_board}')
+    score1 = get_score_for_two_players(p1_move, p1_move, init_board=init_board)
+    print(f'p1 VS p1 score: {score1}')
+
+    score = get_score_for_two_players(p1_move, random_player.play, init_board=init_board)
+    print(f'p1 VS random_player score: {score}')
+
+    for i in range(4):
+        tower_progress_agent = TowerProgressAgent(i)
+        striking_position_agent = StrikingPositionAgent(i)
+        possible_moves_agent = PossibleMovesAgent(i)
+        score = get_score_for_two_players(p1_move, tower_progress_agent.play, 100, init_board=init_board)
+        print(f'p1 VS tower_progress_agent score: {score}, minmax depth {i}')
+
+        score = get_score_for_two_players(p1_move, striking_position_agent.play, 100, init_board=init_board)
+        print(f'p1 VS striking_position_agent score: {score}, minmax depth {i}')
+
+        score = get_score_for_two_players(p1_move, possible_moves_agent.play, 100, init_board=init_board)
+        print(f'p1 VS possible_moves_agent score: {score}, minmax depth {i}')
