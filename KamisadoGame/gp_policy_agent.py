@@ -20,6 +20,8 @@ from KamisadoGame.tower_progress_agent import TowerProgressAgent
 from KamisadoGame.kamisado import Kamisado, Player
 from KamisadoGame.random_agent import RandomAgent
 
+seed = 10
+random.seed(seed)
 
 def getBoard(board):
     return board
@@ -78,9 +80,9 @@ def getMoveTowerProgress(board, move_tuple):
         move_tuple = (move_tuple[0], board.players_pos[player][move_tuple[0]])
     tower, (tower_y, tower_x) = move_tuple
     if Player.WHITE == player:
-        tower_progress_frec = (7 - tower_y) / 7
+        tower_progress_frec = (7 - tower_y)
     else:
-        tower_progress_frec = tower_y / 7
+        tower_progress_frec = tower_y
     return tower_progress_frec
 
 
@@ -125,22 +127,22 @@ def isLostMove(board, move_tuple):
     if move_tuple:
         tower, move = move_tuple
         new_board = board.move_tower(tower, move)
-        return isThereWinMove(getPossibleMoves(new_board))
+        return -100 if isThereWinMove(getPossibleMoves(new_board)) else 0
     else:
-        return False
+        return 0
 
 
 def isWinMove(move_tuple):
     if move_tuple:
-        return isThereWinMove([move_tuple])
+        return 100 if isThereWinMove([move_tuple]) else 0
     else:
-        return False
+        return 0
 
 
 random_player = RandomAgent()
-tower_progress_agent = TowerProgressAgent(1)
-striking_position_agent = StrikingPositionAgent(1)
-possible_moves_agent = PossibleMovesAgent(1)
+tower_progress_agent = TowerProgressAgent(0)
+striking_position_agent = StrikingPositionAgent(0)
+possible_moves_agent = PossibleMovesAgent(0)
 
 
 def get_gp_play_move(gp_policy):
@@ -181,62 +183,72 @@ def evalSolver(individual, games=50):
     games_lost = 0
     games_tie = 0
     moves_counts = []
+    tower_progress_list = []
+    striking_position_list = []
+    possible_moves_list = []
     max_steps_num = 100
-    for i in range(10):
+    for i in range(5):
         p2_play = random_player.play
         board, moves_count = kamisado_simulator(ea_play_move, p2_play, max_steps_num)
-        res = board.is_game_won()
-        if res == Player.WHITE:
-            games_won += 1
-            moves_counts.append(1)
-        elif res == Player.BLACK:
-            games_lost += 1
-            moves_counts.append(moves_count / max_steps_num)
-        else:
-            games_tie += 1
-            moves_counts.append(moves_count / max_steps_num)
+        games_lost, games_tie, games_won1 = get_stats(board, max_steps_num, moves_count, moves_counts,
+                                                      possible_moves_list, striking_position_list, tower_progress_list,
+                                                      Player.WHITE)
 
         board, moves_count = kamisado_simulator(p2_play, ea_play_move, max_steps_num)
         res = board.is_game_won()
-        if res == Player.BLACK:
-            games_won += 1
-            moves_counts.append(1)
-        elif res == Player.WHITE:
-            games_lost += 1
-            moves_counts.append(moves_count / max_steps_num)
-        else:
-            games_tie += 1
-            moves_counts.append(moves_count / max_steps_num)
+        games_lost, games_tie, games_won2 = get_stats(board, max_steps_num, moves_count, moves_counts,
+                                                      possible_moves_list, striking_position_list, tower_progress_list,
+                                                      Player.BLACK)
+        games_won += games_won1 + games_won2
 
-    for agent in [tower_progress_agent, striking_position_agent, possible_moves_agent]:
-        p2_play = agent.play
-        board, moves_count = kamisado_simulator(ea_play_move, p2_play, max_steps_num)
-        res = board.is_game_won()
-        if res == Player.WHITE:
-            games_won += 1
-            moves_counts.append(1)
-        elif res == Player.BLACK:
-            games_lost += 1
-            moves_counts.append(moves_count / max_steps_num)
-        else:
-            games_tie += 1
-            moves_counts.append(moves_count / max_steps_num)
+    for i in range(2):
+        for agent in [tower_progress_agent, striking_position_agent, possible_moves_agent]:
+            # for agent in [tower_progress_agent]:
+            p2_play = agent.play
+            board, moves_count = kamisado_simulator(ea_play_move, p2_play, max_steps_num)
+            games_lost, games_tie, games_won1 = get_stats(board, max_steps_num, moves_count, moves_counts,
+                                                          possible_moves_list, striking_position_list, tower_progress_list,
+                                                          Player.WHITE)
 
-        board, moves_count = kamisado_simulator(p2_play, ea_play_move, max_steps_num)
-        res = board.is_game_won()
-        if res == Player.BLACK:
-            games_won += 1
-            moves_counts.append(1)
-        elif res == Player.WHITE:
-            games_lost += 1
-            moves_counts.append(moves_count / max_steps_num)
-        else:
-            games_tie += 1
-            moves_counts.append(moves_count / max_steps_num)
+            board, moves_count = kamisado_simulator(p2_play, ea_play_move, max_steps_num)
+            res = board.is_game_won()
+            games_lost, games_tie, games_won2 = get_stats(board, max_steps_num, moves_count, moves_counts,
+                                                          possible_moves_list, striking_position_list, tower_progress_list,
+                                                          Player.BLACK)
+            games_won += games_won1 + games_won2
 
     end = timeit.default_timer()
     tree_length = len(individual)
-    return games_won, np.mean(moves_counts)
+    return games_won, np.mean(moves_counts), np.mean(tower_progress_list), np.mean(striking_position_list), np.mean(
+        possible_moves_list)
+
+
+def get_stats(board, max_steps_num, moves_count, moves_counts, possible_moves_list, striking_position_list,
+              tower_progress_list, max_player=Player.WHITE):
+    games_won = 0
+    games_lost = 0
+    games_tie = 0
+    res = board.is_game_won()
+    if res == max_player:
+        games_won += 1
+        moves_counts.append(2 - moves_count / max_steps_num)
+        tower_progress_list.append(2 + tower_progress_agent.evaluate_game(board, max_player))
+        striking_position_list.append(2 + striking_position_agent.evaluate_game(board, max_player))
+        possible_moves_list.append(2 + striking_position_agent.evaluate_game(board, max_player))
+
+    elif res is None:
+        games_tie += 1
+        moves_counts.append(moves_count / max_steps_num)
+        tower_progress_list.append(tower_progress_agent.evaluate_game(board, max_player))
+        striking_position_list.append(striking_position_agent.evaluate_game(board, max_player))
+        possible_moves_list.append(striking_position_agent.evaluate_game(board, max_player))
+    else:
+        games_lost += 1
+        moves_counts.append(moves_count / max_steps_num)
+        tower_progress_list.append(tower_progress_agent.evaluate_game(board, max_player))
+        striking_position_list.append(striking_position_agent.evaluate_game(board, max_player))
+        possible_moves_list.append(striking_position_agent.evaluate_game(board, max_player))
+    return games_lost, games_tie, games_won
 
 
 def getMove(move_tuple):
@@ -295,7 +307,7 @@ def get_score_for_two_players(p1_move, p2_move, games_count=100):
             score[0] += 1
         else:
             score[1] += 1
-    return score / (games_count * 2)
+    return score
 
 
 def moveTower(board, move_tuple):
@@ -330,21 +342,21 @@ def possible_position_eval(board, player):
 
 pset = gp.PrimitiveSetTyped("main", [Kamisado, tuple], float)
 # pset.addPrimitive(getBoard, [Kamisado], Kamisado)
-pset.addPrimitive(getCurrentPlayer, [Kamisado], Player)
-pset.addPrimitive(getOtherPlayer, [Kamisado], Player)
-pset.addPrimitive(tower_progress_eval, [Kamisado, Player], float)
-pset.addPrimitive(striking_position_eval, [Kamisado, Player], float)
-pset.addPrimitive(possible_position_eval, [Kamisado, Player], float)
+# pset.addPrimitive(getCurrentPlayer, [Kamisado], Player)
+# pset.addPrimitive(getOtherPlayer, [Kamisado], Player)
+# pset.addPrimitive(tower_progress_eval, [Kamisado, Player], float)
+# pset.addPrimitive(striking_position_eval, [Kamisado, Player], float)
+# pset.addPrimitive(possible_position_eval, [Kamisado, Player], float)
 pset.addPrimitive(moveTower, [Kamisado, tuple], Kamisado)
-pset.addPrimitive(getTotalTowerProgress, [Kamisado], float)
+# pset.addPrimitive(getTotalTowerProgress, [Kamisado], float)
 pset.addPrimitive(getMoveTowerProgress, [Kamisado, tuple], float)
 pset.addPrimitive(moveSrikingPositionCount, [Kamisado, tuple], float)
-pset.addPrimitive(getPossibleMovesCount, [Kamisado], float)
+# pset.addPrimitive(getPossibleMovesCount, [Kamisado], float)
 pset.addPrimitive(getEnemyPossibleMovesCount, [Kamisado, tuple], float)
 pset.addPrimitive(operator.gt, [float, float], bool)
 pset.addPrimitive(operator.le, [float, float], bool)
-pset.addPrimitive(isLostMove, [Kamisado, tuple], bool)
-pset.addPrimitive(isWinMove, [tuple], bool)
+pset.addPrimitive(isLostMove, [Kamisado, tuple], float)
+pset.addPrimitive(isWinMove, [tuple], float)
 pset.addPrimitive(getMove, [tuple], tuple)
 pset.addPrimitive(if_then_else, [bool, float, float], float)
 
@@ -368,17 +380,19 @@ pset.addTerminal([], list)
 for i in range(11):
     pset.addTerminal(i / 10, float)
     pset.addTerminal(i, float)
+pset.addTerminal(100, float)
+pset.addTerminal(-100, float)
 pset.renameArguments(ARG0="Board")
 pset.renameArguments(ARG1="move_tuple")
 # pset.addTerminal(Kamisado(), Kamisado)
 
-creator.create("FitnessMax", base.Fitness, weights=(2.0, 1.0))
+creator.create("FitnessMax", base.Fitness, weights=(2.0, 1.0, 0.5, 0.5, 0.5))
 creator.create("Individual", gp.PrimitiveTree, fitness=creator.FitnessMax)
 
 toolbox = base.Toolbox()
-seed = 12
-max_tree_length = 15
-toolbox.register("expr", gp.genHalfAndHalf, pset=pset, min_=1, max_=max_tree_length)
+
+max_tree_length = 20
+toolbox.register("expr", gp.genHalfAndHalf, pset=pset, min_=4, max_=7)
 toolbox.register("individual", tools.initIterate, creator.Individual, toolbox.expr)
 toolbox.register("population", tools.initRepeat, list, toolbox.individual)
 toolbox.register("compile", gp.compile, pset=pset)
@@ -386,7 +400,7 @@ toolbox.register("evaluate", evalSolver)
 # toolbox.register("select", selAgentTournament, tournsize=5)
 toolbox.register("select", tools.selTournament, tournsize=4)
 toolbox.register("mate", gp.cxOnePoint)
-toolbox.register("expr_mut", gp.genHalfAndHalf, min_=2, max_=max_tree_length)
+toolbox.register("expr_mut", gp.genHalfAndHalf, min_=1, max_=4)
 toolbox.register("mutate", gp.mutUniform, expr=toolbox.expr_mut, pset=pset)
 
 toolbox.decorate("mate", gp.staticLimit(key=operator.attrgetter("height"), max_value=max_tree_length))
@@ -395,28 +409,32 @@ toolbox.decorate("mutate", gp.staticLimit(key=operator.attrgetter("height"), max
 games_won = tools.Statistics(lambda ind: ind.fitness.values[0])
 # [tower_progress_sum, striking_position_sum, possible_moves_sum]
 move_count_mean = tools.Statistics(lambda ind: ind.fitness.values[1])
-mstats = tools.MultiStatistics(games_won=games_won, move_count_mean=move_count_mean)
+progress_mean = tools.Statistics(lambda ind: ind.fitness.values[2])
+strike_mean = tools.Statistics(lambda ind: ind.fitness.values[3])
+possible_moves_mean = tools.Statistics(lambda ind: ind.fitness.values[4])
+mstats = tools.MultiStatistics(games_won=games_won, move_count_mean=move_count_mean, progress_mean=progress_mean,
+                               strike_mean=strike_mean, possible_moves_mean=possible_moves_mean)
 # mstats = tools.MultiStatistics(games_won=games_won, avg_move_to_win=avg_move_to_win, avg_game_tie=avg_game_tie)
 # mstats = wins_stats
 mstats.register("Avg", np.mean)
 mstats.register("Std", np.std)
-mstats.register("Median", np.median)
+# mstats.register("Median", np.median)
 mstats.register("Min", np.min)
 mstats.register("Max", np.max)
 
-pop = toolbox.population(n=1000)
+pop = toolbox.population(n=100)
 hof = tools.HallOfFame(1)
 
-random.seed(seed)
-pop, logbook = algorithms.eaSimple(pop, toolbox, 0.7, 0.001, 100, stats=mstats,
+
+pop, logbook = algorithms.eaSimple(pop, toolbox, 0.7, 0.01, 50, stats=mstats,
                                    halloffame=hof, verbose=True)
 print(hof[0])
 
-[popolaation_size, cx_p, mut_p, gen, max_tree_length,seed]
+# [popolaation_size, cx_p, mut_p, gen, max_tree_length,seed]
 
-tower_progress_agent = TowerProgressAgent()
-striking_position_agent = StrikingPositionAgent()
-possible_moves_agent = PossibleMovesAgent()
+# tower_progress_agent = TowerProgressAgent()
+# striking_position_agent = StrikingPositionAgent()
+# possible_moves_agent = PossibleMovesAgent()
 
 p1_move = get_playe_move_from_policy(hof[0])
 
@@ -426,11 +444,15 @@ print(f'p1 VS p1 score: {score1}')
 score = get_score_for_two_players(p1_move, random_player.play)
 print(f'p1 VS random_player score: {score}')
 
-score = get_score_for_two_players(p1_move, tower_progress_agent.play, 2)
-print(f'p1 VS tower_progress_agent score: {score}')
+for i in range(4):
+    tower_progress_agent = TowerProgressAgent(i)
+    striking_position_agent = StrikingPositionAgent(i)
+    possible_moves_agent = PossibleMovesAgent(i)
+    score = get_score_for_two_players(p1_move, tower_progress_agent.play, 100)
+    print(f'p1 VS tower_progress_agent score: {score}, minmax depth {i}')
 
-score = get_score_for_two_players(p1_move, striking_position_agent.play, 2)
-print(f'p1 VS striking_position_agent score: {score}')
+    score = get_score_for_two_players(p1_move, striking_position_agent.play, 100)
+    print(f'p1 VS striking_position_agent score: {score}, minmax depth {i}')
 
-score = get_score_for_two_players(p1_move, possible_moves_agent.play, 2)
-print(f'p1 VS possible_moves_agent score: {score}')
+    score = get_score_for_two_players(p1_move, possible_moves_agent.play, 100)
+    print(f'p1 VS possible_moves_agent score: {score}, minmax depth {i}')
