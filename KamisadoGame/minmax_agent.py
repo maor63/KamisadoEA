@@ -14,11 +14,13 @@ class MinMaxAgent(ABC):
         assert isinstance(board, Kamisado)
         towers_possible_moves = board.get_possible_moves()
         moves_estimation_dict = Counter()
+        alpha, beta, best = self.MIN, self.MAX, self.MIN
         for tower, possible_moves in towers_possible_moves.items():
             for possible_move in possible_moves:
                 new_board = board.move_tower(tower, possible_move)
-                minimax_val = self.minimax(0, new_board, False, self.MIN, self.MAX, self._max_depth, board.current_player)
+                minimax_val = self.minimax(0, new_board, False, alpha, beta, self._max_depth, board.current_player)
                 moves_estimation_dict[(tower, possible_move)] = minimax_val
+                alpha, best, beta = self._eval_max_alpha_beta_best(alpha, best, beta, minimax_val)
 
         tower, move = moves_estimation_dict.most_common(1)[0][0]
         return tower, move
@@ -50,7 +52,8 @@ class MinMaxAgent(ABC):
         return self.iterate_children(alpha, self.MIN, beta, board, depth, self._eval_max_alpha_beta_best,
                                      isMaximizingPlayer, max_depth, max_player)
 
-    def iterate_children(self, alpha, best, beta, board, depth, eval_alpha_beta_best, isMaximizingPlayer, max_depth, max_player):
+    def iterate_children(self, alpha, best, beta, board, depth, eval_alpha_beta_best, isMaximizingPlayer, max_depth,
+                         max_player):
         # iterate children
         towers_possible_moves = board.get_possible_moves()
         for tower, possible_moves in towers_possible_moves.items():

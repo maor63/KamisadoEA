@@ -1,5 +1,6 @@
 import copy
 import operator
+import os
 import random
 import timeit
 from collections import Counter, defaultdict
@@ -19,6 +20,7 @@ from KamisadoGame.striking_position_agent import StrikingPositionAgent
 from KamisadoGame.tower_progress_agent import TowerProgressAgent
 from KamisadoGame.kamisado import Kamisado, Player
 from KamisadoGame.random_agent import RandomAgent
+import pandas as pd
 
 seed = 10
 random.seed(seed)
@@ -188,34 +190,34 @@ def evalSolver(individual, games=50):
     striking_position_list = []
     possible_moves_list = []
     max_steps_num = 100
-    for i in range(5):
-        p2_play = random_player.play
-        board, moves_count = kamisado_simulator(ea_play_move, p2_play, max_steps_num)
-        games_lost, games_tie, games_won1 = get_stats(board, max_steps_num, moves_count, moves_counts,
-                                                      possible_moves_list, striking_position_list, tower_progress_list,
-                                                      Player.WHITE)
+    # for i in range(5):
+    #     p2_play = random_player.play
+    #     board, moves_count = kamisado_simulator(ea_play_move, p2_play, max_steps_num)
+    #     games_lost, games_tie, games_won1 = get_stats(board, max_steps_num, moves_count, moves_counts,
+    #                                                   possible_moves_list, striking_position_list, tower_progress_list,
+    #                                                   Player.WHITE)
+    #
+    #     board, moves_count = kamisado_simulator(p2_play, ea_play_move, max_steps_num)
+    #     res = board.is_game_won()
+    #     games_lost, games_tie, games_won2 = get_stats(board, max_steps_num, moves_count, moves_counts,
+    #                                                   possible_moves_list, striking_position_list, tower_progress_list,
+    #                                                   Player.BLACK)
+    #     games_won += games_won1 + games_won2
 
-        board, moves_count = kamisado_simulator(p2_play, ea_play_move, max_steps_num)
-        res = board.is_game_won()
-        games_lost, games_tie, games_won2 = get_stats(board, max_steps_num, moves_count, moves_counts,
-                                                      possible_moves_list, striking_position_list, tower_progress_list,
-                                                      Player.BLACK)
-        games_won += games_won1 + games_won2
-
-    for i in range(2):
+    for board_init in [None, [3, 5, 2, 6, 1, 7, 0, 4], [0, 2, 4, 6, 1, 3, 5, 7], [1, 3, 5, 7, 0, 2, 4, 6]]:
         tower_progress_agent = TowerProgressAgent(0)
         striking_position_agent = StrikingPositionAgent(0)
         possible_moves_agent = PossibleMovesAgent(0)
-        for agent in [tower_progress_agent, striking_position_agent, possible_moves_agent]:
+        for agent in [random_player, tower_progress_agent, striking_position_agent, possible_moves_agent]:
             # for agent in [tower_progress_agent]:
             p2_play = agent.play
-            board, moves_count = kamisado_simulator(ea_play_move, p2_play, max_steps_num)
+            board, moves_count = kamisado_simulator(ea_play_move, p2_play, max_steps_num, init_board=board_init)
             games_lost, games_tie, games_won1 = get_stats(board, max_steps_num, moves_count, moves_counts,
                                                           possible_moves_list, striking_position_list,
                                                           tower_progress_list,
                                                           Player.WHITE)
 
-            board, moves_count = kamisado_simulator(p2_play, ea_play_move, max_steps_num)
+            board, moves_count = kamisado_simulator(p2_play, ea_play_move, max_steps_num, init_board=board_init)
             res = board.is_game_won()
             games_lost, games_tie, games_won2 = get_stats(board, max_steps_num, moves_count, moves_counts,
                                                           possible_moves_list, striking_position_list,
@@ -347,13 +349,13 @@ def possible_position_eval(board, player):
 
 
 pset = gp.PrimitiveSetTyped("main", [Kamisado, tuple], float)
-# pset.addPrimitive(getBoard, [Kamisado], Kamisado)
+pset.addPrimitive(getBoard, [Kamisado], Kamisado)
 # pset.addPrimitive(getCurrentPlayer, [Kamisado], Player)
 # pset.addPrimitive(getOtherPlayer, [Kamisado], Player)
 # pset.addPrimitive(tower_progress_eval, [Kamisado, Player], float)
 # pset.addPrimitive(striking_position_eval, [Kamisado, Player], float)
 # pset.addPrimitive(possible_position_eval, [Kamisado, Player], float)
-pset.addPrimitive(moveTower, [Kamisado, tuple], Kamisado)
+# pset.addPrimitive(moveTower, [Kamisado, tuple], Kamisado)
 # pset.addPrimitive(getTotalTowerProgress, [Kamisado], float)
 pset.addPrimitive(getMoveTowerProgress, [Kamisado, tuple], float)
 pset.addPrimitive(moveSrikingPositionCount, [Kamisado, tuple], float)
@@ -392,13 +394,13 @@ pset.renameArguments(ARG0="Board")
 pset.renameArguments(ARG1="move_tuple")
 # pset.addTerminal(Kamisado(), Kamisado)
 
-creator.create("FitnessMax", base.Fitness, weights=(2.0, 1.0, 0.5, 1.0, 0.5))
+creator.create("FitnessMax", base.Fitness, weights=(10.0, 0.5, 1.0, 2.0, 0.5))
 creator.create("Individual", gp.PrimitiveTree, fitness=creator.FitnessMax)
 
 toolbox = base.Toolbox()
 
-max_tree_length = 20
-toolbox.register("expr", gp.genHalfAndHalf, pset=pset, min_=4, max_=7)
+max_tree_length = 10
+toolbox.register("expr", gp.genHalfAndHalf, pset=pset, min_=4, max_=10)
 toolbox.register("individual", tools.initIterate, creator.Individual, toolbox.expr)
 toolbox.register("population", tools.initRepeat, list, toolbox.individual)
 toolbox.register("compile", gp.compile, pset=pset)
@@ -428,12 +430,21 @@ mstats.register("Std", np.std)
 mstats.register("Min", np.min)
 mstats.register("Max", np.max)
 
-pop = toolbox.population(n=100)
+pop_size = 100
+pop = toolbox.population(n=pop_size)
 hof = tools.HallOfFame(1)
 
-pop, logbook = algorithms.eaSimple(pop, toolbox, 0.7, 0.01, 50, stats=mstats,
+games_count = 5
+cxpb = 0.7
+mutpb = 0.01
+ngen = 100
+pop, logbook = algorithms.eaSimple(pop, toolbox, cxpb, mutpb, ngen, stats=mstats,
                                    halloffame=hof, verbose=True)
 print(hof[0])
+
+output_path = 'data/'
+if not os.path.exists(output_path):
+    os.makedirs(output_path)
 
 # [popolaation_size, cx_p, mut_p, gen, max_tree_length,seed]
 
@@ -442,48 +453,92 @@ print(hof[0])
 # possible_moves_agent = PossibleMovesAgent()
 
 p1_move = get_playe_move_from_policy(hof[0])
+print(evalSolver(hof[0]))
 
+cols = ['p1', 'p2', 'win', 'tie', 'lose']
+train_rows = []
 print('############################Train Data###################################')
 
-score1 = get_score_for_two_players(p1_move, p1_move)
-print(f'p1 VS p1 score: {score1}')
+for board_init in [None, [3, 5, 2, 6, 1, 7, 0, 4], [0, 2, 4, 6, 1, 3, 5, 7], [1, 3, 5, 7, 0, 2, 4, 6]]:
+    print(board_init)
+    row = []
+    score = get_score_for_two_players(p1_move, p1_move, games_count, init_board=board_init)
+    print(f'p1 VS p1 score: {score}')
+    row.append(score)
 
-score = get_score_for_two_players(p1_move, random_player.play)
-print(f'p1 VS random_player score: {score}')
-
-for i in range(4):
-    tower_progress_agent = TowerProgressAgent(i)
-    striking_position_agent = StrikingPositionAgent(i)
-    possible_moves_agent = PossibleMovesAgent(i)
-    score = get_score_for_two_players(p1_move, tower_progress_agent.play, 100)
-    print(f'p1 VS tower_progress_agent score: {score}, minmax depth {i}')
-
-    score = get_score_for_two_players(p1_move, striking_position_agent.play, 100)
-    print(f'p1 VS striking_position_agent score: {score}, minmax depth {i}')
-
-    score = get_score_for_two_players(p1_move, possible_moves_agent.play, 100)
-    print(f'p1 VS possible_moves_agent score: {score}, minmax depth {i}')
-
-print('############################Test Data###################################')
-for j in range(10):
-    init_board = list(range(8))
-    random.shuffle(init_board)
-    print(f'board init {init_board}')
-    score1 = get_score_for_two_players(p1_move, p1_move, init_board=init_board)
-    print(f'p1 VS p1 score: {score1}')
-
-    score = get_score_for_two_players(p1_move, random_player.play, init_board=init_board)
+    score = get_score_for_two_players(p1_move, random_player.play, games_count, init_board=board_init)
     print(f'p1 VS random_player score: {score}')
+    row.append(score)
 
     for i in range(4):
         tower_progress_agent = TowerProgressAgent(i)
         striking_position_agent = StrikingPositionAgent(i)
         possible_moves_agent = PossibleMovesAgent(i)
-        score = get_score_for_two_players(p1_move, tower_progress_agent.play, 100, init_board=init_board)
+        score = get_score_for_two_players(p1_move, tower_progress_agent.play, games_count, init_board=board_init)
         print(f'p1 VS tower_progress_agent score: {score}, minmax depth {i}')
+        row.append(score)
 
-        score = get_score_for_two_players(p1_move, striking_position_agent.play, 100, init_board=init_board)
+        score = get_score_for_two_players(p1_move, striking_position_agent.play, games_count, init_board=board_init)
         print(f'p1 VS striking_position_agent score: {score}, minmax depth {i}')
+        row.append(score)
 
-        score = get_score_for_two_players(p1_move, possible_moves_agent.play, 100, init_board=init_board)
+        score = get_score_for_two_players(p1_move, possible_moves_agent.play, games_count, init_board=board_init)
         print(f'p1 VS possible_moves_agent score: {score}, minmax depth {i}')
+        row.append(score)
+
+    train_rows.append(row)
+
+spacial_agents = [[f'tower_progress_d{i}', f'striking_position_d{i}', f'possible_moves_d{i}'] for i in range(4)]
+agents_names = ['p1', 'random'] + list(chain(*spacial_agents))
+
+train_df_rows = []
+for idx, score_list in enumerate(zip(*train_rows)):
+    score_sum = np.array(score_list).sum(axis=0)
+    train_df_rows.append(['p1', agents_names[idx], score_sum[0], score_sum[1], score_sum[2]])
+
+train_df = pd.DataFrame(train_df_rows, columns=cols)
+file_name = f'train_results_pop{pop_size}_gen{ngen}_cxpb{cxpb}_mutpb{mutpb}_max{max_tree_length}.csv'
+train_df.to_csv(os.path.join(output_path, file_name))
+
+
+test_rows = []
+print('############################Test Data###################################')
+for j in range(10):
+    row = []
+    init_board = list(range(8))
+    random.shuffle(init_board)
+    print(f'board init {init_board}')
+    score = get_score_for_two_players(p1_move, p1_move, games_count, init_board=init_board)
+    print(f'p1 VS p1 score: {score}')
+    row.append(score)
+
+    score = get_score_for_two_players(p1_move, random_player.play, games_count, init_board=init_board)
+    print(f'p1 VS random_player score: {score}')
+    row.append(score)
+
+    for i in range(4):
+        tower_progress_agent = TowerProgressAgent(i)
+        striking_position_agent = StrikingPositionAgent(i)
+        possible_moves_agent = PossibleMovesAgent(i)
+        score = get_score_for_two_players(p1_move, tower_progress_agent.play, games_count, init_board=init_board)
+        print(f'p1 VS tower_progress_agent score: {score}, minmax depth {i}')
+        row.append(score)
+
+        score = get_score_for_two_players(p1_move, striking_position_agent.play, games_count, init_board=init_board)
+        print(f'p1 VS striking_position_agent score: {score}, minmax depth {i}')
+        row.append(score)
+
+        score = get_score_for_two_players(p1_move, possible_moves_agent.play, games_count, init_board=init_board)
+        print(f'p1 VS possible_moves_agent score: {score}, minmax depth {i}')
+        row.append(score)
+    test_rows.append(row)
+
+
+test_df_rows = []
+for idx, score_list in enumerate(zip(*test_rows)):
+    score_sum = np.array(score_list).sum(axis=0)
+    test_df_rows.append(['p1', agents_names[idx], score_sum[0], score_sum[1], score_sum[2]])
+
+test_df = pd.DataFrame(test_df_rows, columns=cols)
+file_name = f'test_results_pop{pop_size}_gen{ngen}_cxpb{cxpb}_mutpb{mutpb}_max{max_tree_length}.csv'
+test_df.to_csv(os.path.join(output_path, file_name))

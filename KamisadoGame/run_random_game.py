@@ -9,7 +9,7 @@ from KamisadoGame.random_agent import RandomAgent
 from KamisadoGame.striking_position_agent import StrikingPositionAgent
 
 p1 = RandomAgent()
-p2 = PossibleMovesAgent(1)
+p2 = PossibleMovesAgent(0)
 
 players = [p1, p2]
 times = []
