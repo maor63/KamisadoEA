@@ -237,6 +237,7 @@ def evalSolver(individual, games=50):
     tree_length = len(individual)
     return games_won, np.mean(moves_counts), np.mean(tower_progress_list), np.mean(striking_position_list), np.mean(
         possible_moves_list)
+    # return games_won, np.mean(moves_counts)
 
 
 def get_stats(board, max_steps_num, moves_count, moves_counts, possible_moves_list, striking_position_list,
@@ -408,13 +409,14 @@ pset.renameArguments(ARG0="Board")
 pset.renameArguments(ARG1="move_tuple")
 # pset.addTerminal(Kamisado(), Kamisado)
 
-creator.create("FitnessMax", base.Fitness, weights=(10.0, 0.5, 1.0, 2.0, 0.5))
+creator.create("FitnessMax", base.Fitness, weights=(10.0, 0.5, 1.0, 1.0, 1.0))
+# creator.create("FitnessMax", base.Fitness, weights=(10.0, 0.5))
 creator.create("Individual", gp.PrimitiveTree, fitness=creator.FitnessMax)
 
 toolbox = base.Toolbox()
 
-max_tree_length = 25
-toolbox.register("expr", gp.genHalfAndHalf, pset=pset, min_=3, max_=6)
+max_tree_length = 30
+toolbox.register("expr", gp.genHalfAndHalf, pset=pset, min_=3, max_=10)
 toolbox.register("individual", tools.initIterate, creator.Individual, toolbox.expr)
 toolbox.register("population", tools.initRepeat, list, toolbox.individual)
 toolbox.register("compile", gp.compile, pset=pset)
@@ -436,7 +438,7 @@ strike_mean = tools.Statistics(lambda ind: ind.fitness.values[3])
 possible_moves_mean = tools.Statistics(lambda ind: ind.fitness.values[4])
 mstats = tools.MultiStatistics(games_won=games_won, move_count_mean=move_count_mean, progress_mean=progress_mean,
                                strike_mean=strike_mean, possible_moves_mean=possible_moves_mean)
-# mstats = tools.MultiStatistics(games_won=games_won, avg_move_to_win=avg_move_to_win, avg_game_tie=avg_game_tie)
+# mstats = tools.MultiStatistics(games_won=games_won, move_count_mean=move_count_mean)
 # mstats = wins_stats
 mstats.register("Avg", np.mean)
 mstats.register("Std", np.std)
@@ -444,7 +446,7 @@ mstats.register("Std", np.std)
 mstats.register("Min", np.min)
 mstats.register("Max", np.max)
 
-pop_size = 100
+pop_size = 300
 pop = toolbox.population(n=pop_size)
 hof = tools.HallOfFame(1)
 
