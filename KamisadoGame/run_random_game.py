@@ -3,13 +3,14 @@ import timeit
 import numpy as np
 
 from KamisadoGame.possible_moves_agent import PossibleMovesAgent
+from KamisadoGame.possible_striking_agent import PossibleStrikingAgent
 from KamisadoGame.tower_progress_agent import TowerProgressAgent
 from KamisadoGame.kamisado import Kamisado, Player
 from KamisadoGame.random_agent import RandomAgent
 from KamisadoGame.striking_position_agent import StrikingPositionAgent
 
 p1 = TowerProgressAgent(0)
-p2 = PossibleMovesAgent(0)
+p2 = PossibleStrikingAgent(0)
 
 players = [p1, p2]
 times = []
