@@ -130,16 +130,23 @@ def isLostMove(board, move_tuple):
     if move_tuple:
         tower, move = move_tuple
         new_board = board.move_tower(tower, move)
-        return -100 if isThereWinMove(getPossibleMoves(new_board)) else 0
+        return -1000 if isThereWinMove(getPossibleMoves(new_board)) else 0
     else:
         return 0
 
 
 def isWinMove(move_tuple):
     if move_tuple:
-        return 100 if isThereWinMove([move_tuple]) else 0
+        return 1000 if isThereWinMove([move_tuple]) else 0
     else:
         return 0
+
+
+def isWinOrLoseMove(board, move_tuple):
+    assert isinstance(board, Kamisado)
+    win_res = isWinMove(move_tuple)
+    lose_res = isLostMove(board, move_tuple)
+    return win_res + lose_res
 
 
 random_player = RandomAgent()
@@ -204,11 +211,11 @@ def evalSolver(individual, games=50):
     #                                                   Player.BLACK)
     #     games_won += games_won1 + games_won2
 
-    for board_init in [None, [3, 5, 2, 6, 1, 7, 0, 4], [0, 2, 4, 6, 1, 3, 5, 7], [1, 3, 5, 7, 0, 2, 4, 6]]:
+    for board_init in [None, [3, 5, 2, 6, 1, 7, 0, 4], [0, 2, 4, 6, 1, 3, 5, 7]]:
         tower_progress_agent = TowerProgressAgent(0)
         striking_position_agent = StrikingPositionAgent(0)
         possible_moves_agent = PossibleMovesAgent(0)
-        for agent in [random_player, tower_progress_agent, striking_position_agent, possible_moves_agent]:
+        for agent in [random_player, tower_progress_agent, striking_position_agent]:
             # for agent in [tower_progress_agent]:
             p2_play = agent.play
             board, moves_count = kamisado_simulator(ea_play_move, p2_play, max_steps_num, init_board=board_init)
@@ -226,6 +233,7 @@ def evalSolver(individual, games=50):
             games_won += games_won1 + games_won2
 
     end = timeit.default_timer()
+    # print(f'time {end - start} sec')
     tree_length = len(individual)
     return games_won, np.mean(moves_counts), np.mean(tower_progress_list), np.mean(striking_position_list), np.mean(
         possible_moves_list)
@@ -242,20 +250,20 @@ def get_stats(board, max_steps_num, moves_count, moves_counts, possible_moves_li
         moves_counts.append(2 - moves_count / max_steps_num)
         tower_progress_list.append(2 + tower_progress_agent.evaluate_game(board, max_player))
         striking_position_list.append(2 + striking_position_agent.evaluate_game(board, max_player))
-        possible_moves_list.append(2 + striking_position_agent.evaluate_game(board, max_player))
+        possible_moves_list.append(2 + possible_moves_agent.evaluate_game(board, max_player))
 
     elif res is None:
         games_tie += 1
         moves_counts.append(moves_count / max_steps_num)
         tower_progress_list.append(tower_progress_agent.evaluate_game(board, max_player))
         striking_position_list.append(striking_position_agent.evaluate_game(board, max_player))
-        possible_moves_list.append(striking_position_agent.evaluate_game(board, max_player))
+        possible_moves_list.append(possible_moves_agent.evaluate_game(board, max_player))
     else:
         games_lost += 1
         moves_counts.append(moves_count / max_steps_num)
         tower_progress_list.append(tower_progress_agent.evaluate_game(board, max_player))
         striking_position_list.append(striking_position_agent.evaluate_game(board, max_player))
-        possible_moves_list.append(striking_position_agent.evaluate_game(board, max_player))
+        possible_moves_list.append(possible_moves_agent.evaluate_game(board, max_player))
     return games_lost, games_tie, games_won
 
 
@@ -321,7 +329,12 @@ def get_score_for_two_players(p1_move, p2_move, games_count=100, init_board=None
 def moveTower(board, move_tuple):
     assert isinstance(board, Kamisado)
     if move_tuple:
-        return board.move_tower(*move_tuple)
+        tower, move = move_tuple
+        possible_moves = board.get_possible_moves()
+        if tower in possible_moves and move in possible_moves[tower]:
+            return board.move_tower(*move_tuple)
+        else:
+            return board
     else:
         return board
 
@@ -349,22 +362,23 @@ def possible_position_eval(board, player):
 
 
 pset = gp.PrimitiveSetTyped("main", [Kamisado, tuple], float)
-pset.addPrimitive(getBoard, [Kamisado], Kamisado)
+# pset.addPrimitive(getBoard, [Kamisado], Kamisado)
 # pset.addPrimitive(getCurrentPlayer, [Kamisado], Player)
 # pset.addPrimitive(getOtherPlayer, [Kamisado], Player)
 # pset.addPrimitive(tower_progress_eval, [Kamisado, Player], float)
 # pset.addPrimitive(striking_position_eval, [Kamisado, Player], float)
 # pset.addPrimitive(possible_position_eval, [Kamisado, Player], float)
-# pset.addPrimitive(moveTower, [Kamisado, tuple], Kamisado)
-# pset.addPrimitive(getTotalTowerProgress, [Kamisado], float)
+pset.addPrimitive(moveTower, [Kamisado, tuple], Kamisado)
+pset.addPrimitive(getTotalTowerProgress, [Kamisado], float)
 pset.addPrimitive(getMoveTowerProgress, [Kamisado, tuple], float)
 pset.addPrimitive(moveSrikingPositionCount, [Kamisado, tuple], float)
-# pset.addPrimitive(getPossibleMovesCount, [Kamisado], float)
+pset.addPrimitive(getPossibleMovesCount, [Kamisado], float)
 pset.addPrimitive(getEnemyPossibleMovesCount, [Kamisado, tuple], float)
 pset.addPrimitive(operator.gt, [float, float], bool)
 pset.addPrimitive(operator.le, [float, float], bool)
-pset.addPrimitive(isLostMove, [Kamisado, tuple], float)
-pset.addPrimitive(isWinMove, [tuple], float)
+pset.addPrimitive(isWinOrLoseMove, [Kamisado, tuple], float)
+# pset.addPrimitive(isLostMove, [Kamisado, tuple], float)
+# pset.addPrimitive(isWinMove, [tuple], float)
 pset.addPrimitive(getMove, [tuple], tuple)
 pset.addPrimitive(if_then_else, [bool, float, float], float)
 
@@ -399,8 +413,8 @@ creator.create("Individual", gp.PrimitiveTree, fitness=creator.FitnessMax)
 
 toolbox = base.Toolbox()
 
-max_tree_length = 10
-toolbox.register("expr", gp.genHalfAndHalf, pset=pset, min_=4, max_=10)
+max_tree_length = 25
+toolbox.register("expr", gp.genHalfAndHalf, pset=pset, min_=3, max_=6)
 toolbox.register("individual", tools.initIterate, creator.Individual, toolbox.expr)
 toolbox.register("population", tools.initRepeat, list, toolbox.individual)
 toolbox.register("compile", gp.compile, pset=pset)
@@ -438,6 +452,7 @@ games_count = 5
 cxpb = 0.7
 mutpb = 0.01
 ngen = 100
+print(f'pop{pop_size}_gen{ngen}_cxpb{cxpb}_mutpb{mutpb}_max{max_tree_length}')
 pop, logbook = algorithms.eaSimple(pop, toolbox, cxpb, mutpb, ngen, stats=mstats,
                                    halloffame=hof, verbose=True)
 print(hof[0])
@@ -500,7 +515,6 @@ train_df = pd.DataFrame(train_df_rows, columns=cols)
 file_name = f'train_results_pop{pop_size}_gen{ngen}_cxpb{cxpb}_mutpb{mutpb}_max{max_tree_length}.csv'
 train_df.to_csv(os.path.join(output_path, file_name))
 
-
 test_rows = []
 print('############################Test Data###################################')
 for j in range(10):
@@ -532,7 +546,6 @@ for j in range(10):
         print(f'p1 VS possible_moves_agent score: {score}, minmax depth {i}')
         row.append(score)
     test_rows.append(row)
-
 
 test_df_rows = []
 for idx, score_list in enumerate(zip(*test_rows)):

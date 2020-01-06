@@ -11,7 +11,7 @@ from KamisadoGame.striking_position_agent import StrikingPositionAgent
 p1 = RandomAgent()
 p2 = PossibleMovesAgent(0)
 
-players = [p1, p2]
+players = [p2, p2]
 times = []
 score = [0, 0, 0]
 for j in range(100):

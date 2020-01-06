@@ -163,12 +163,10 @@ class Kamisado:
     def move_tower(self, tower, pos):
         assert isinstance(pos, tuple) or pos is None
         possible_moves = self.get_possible_moves()
-        if tower not in possible_moves or pos not in set(chain(*possible_moves.values())):
-            tower = random.choice(list(possible_moves.keys()))
-            pos = random.choice(list(possible_moves[tower]))
+        if tower in possible_moves and pos in set(possible_moves[tower]):
             return self._move_tower_to_pos(pos, tower)
         else:
-            return self._move_tower_to_pos(pos, tower)
+            return self
 
     def _move_tower_to_pos(self, pos, tower):
         new_black_player_pos = dict(self.black_player_pos)
