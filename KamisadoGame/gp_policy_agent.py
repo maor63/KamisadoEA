@@ -50,19 +50,32 @@ def getOpenEndPostionsCount(board):
     return open_end_position
 
 
+def getStrikingPositionFrec(board):
+    assert isinstance(board, Kamisado)
+    return strikingPossitionEval(board, board.current_player)
+
+
+def getTowerProgressFrec(board):
+    return towerProgressEval(board, board.current_player)
+
+
+def getPossiblePossitionFrec(board):
+    return possibleMovesEval(board, board.current_player)
+
+
 def moveSrikingPositionCount(board, move_tuple):
     assert isinstance(board, Kamisado)
     if move_tuple:
         new_board = board.move_tower(*move_tuple)
         new_board.current_player = board.current_player
-        possible_moves = getPossibleMoves(new_board)
+        possible_moves = new_board.getPossibleMovesTuples()
         possible_moves = [(tower, move) for (tower, move) in possible_moves if move is not None]
         return len(get_win_moves(possible_moves))
     else:
         return 0
 
 
-def getTotalTowerProgress(board):
+def getTowerPassHafe(board):
     assert isinstance(board, Kamisado)
     tower_places = np.zeros((8, 8))
     player = board.current_player
@@ -92,17 +105,7 @@ def getMoveTowerProgress(board, move_tuple):
 
 def getPossibleMovesCount(board):
     assert isinstance(board, Kamisado)
-    return len(getPossibleMoves(board))
-
-
-def getPossibleMoves(board):
-    assert isinstance(board, Kamisado)
-    player_possible_moves = board.get_possible_moves()
-    possible_moves = []
-    for tower, moves in player_possible_moves.items():
-        for move in moves:
-            possible_moves.append((tower, move))
-    return possible_moves
+    return len(board.getPossibleMovesTuples())
 
 
 def getEnemyPossibleMovesCount(board, move_tuple):
@@ -131,7 +134,7 @@ def isLostMove(board, move_tuple):
     if move_tuple:
         tower, move = move_tuple
         new_board = board.move_tower(tower, move)
-        return -1000 if isThereWinMove(getPossibleMoves(new_board)) else 0
+        return -1000 if isThereWinMove(new_board.getPossibleMovesTuples()) else 0
     else:
         return 0
 
@@ -157,10 +160,55 @@ possible_moves_agent = PossibleMovesAgent(0)
 possible_striking_agent = PossibleStrikingAgent(0)
 
 
+def towerProgressEval(board, max_player):
+    assert isinstance(board, Kamisado)
+    white_progress_sum = sum([7 - y for tower, (y, x) in board.white_player_pos.items()]) + 1
+    black_progress_sum = sum([y - 0 for tower, (y, x) in board.black_player_pos.items()]) + 1
+    if max_player == Player.WHITE:
+        return white_progress_sum / black_progress_sum
+    else:
+        return black_progress_sum / white_progress_sum
+
+
+def strikingPossitionEval(board, max_player):
+    assert isinstance(board, Kamisado)
+    new_board = board.clone()
+    new_board.tower_can_play = ["Brown", "Green", "Red", "Yellow", "Pink", "Purple", "Blue", "Orange"]
+    new_board.current_player = Player.WHITE
+    white_striking_sum = len([1 for tower, pos in new_board.getPossibleMovesTuples() if pos and pos[0] == 0]) + 1
+
+    new_board = board.clone()
+    new_board.tower_can_play = ["Brown", "Green", "Red", "Yellow", "Pink", "Purple", "Blue", "Orange"]
+    new_board.current_player = Player.BLACK
+    black_striking_sum = len([1 for tower, pos in new_board.getPossibleMovesTuples() if pos and pos[0] == 7]) + 1
+    if max_player == Player.WHITE:
+        return white_striking_sum / black_striking_sum
+    else:
+        return black_striking_sum / white_striking_sum
+
+
+def possibleMovesEval(board, max_player):
+    assert isinstance(board, Kamisado)
+    new_board = board.clone()
+    new_board.tower_can_play = ["Brown", "Green", "Red", "Yellow", "Pink", "Purple", "Blue", "Orange"]
+    new_board.current_player = Player.WHITE
+    white_possible_sum = len(new_board.getPossibleMovesTuples()) + 1
+
+    new_board = board.clone()
+    new_board.tower_can_play = ["Brown", "Green", "Red", "Yellow", "Pink", "Purple", "Blue", "Orange"]
+    new_board.current_player = Player.BLACK
+    black_possible_sum = len(new_board.getPossibleMovesTuples()) + 1
+    if max_player == Player.WHITE:
+        return white_possible_sum / black_possible_sum
+    else:
+        return black_possible_sum / white_possible_sum
+
+
 def get_gp_play_move(gp_policy):
     def gp_play_move(board):
         assert isinstance(board, Kamisado)
-        moves_ranks = Counter({move_tuple: gp_policy(board, move_tuple) for move_tuple in getPossibleMoves(board)})
+        moves_ranks = Counter(
+            {move_tuple: gp_policy(board, move_tuple) for move_tuple in board.getPossibleMovesTuples()})
         selected_move = moves_ranks.most_common(1)[0][0]
         return selected_move
 
@@ -173,6 +221,7 @@ def kamisado_simulator(p1_play_move, p2_play_move, max_steps_num=10000, init_boa
     none_count = 0
     i = 0
     # while not board.is_game_won() and none_count < 10:
+    start = timeit.default_timer()
     for i in range(max_steps_num):
         play_move = players[i % len(players)]
         move_tuple = play_move(board)
@@ -182,6 +231,8 @@ def kamisado_simulator(p1_play_move, p2_play_move, max_steps_num=10000, init_boa
         none_count = none_count + 1 if not move else 0
         if board.is_game_won() or none_count >= 3:
             break
+    end = timeit.default_timer()
+    # print(f'game time {end-start} sec')
     return board, i
 
 
@@ -217,9 +268,9 @@ def evalSolver(individual, games=50):
     for board_init in [None, [3, 5, 2, 6, 1, 7, 0, 4], [0, 2, 4, 6, 1, 3, 5, 7]]:
         tower_progress_agent = TowerProgressAgent(0)
         striking_position_agent = StrikingPositionAgent(0)
-        # possible_moves_agent = PossibleMovesAgent(0)
+        possible_moves_agent = PossibleMovesAgent(0)
         # possible_striking_agent = PossibleStrikingAgent(0)
-        for agent in [random_player, tower_progress_agent, striking_position_agent]:
+        for agent in [random_player, tower_progress_agent, striking_position_agent, possible_moves_agent]:
             # for agent in [tower_progress_agent]:
             p2_play = agent.play
             board, moves_count = kamisado_simulator(ea_play_move, p2_play, max_steps_num, init_board=board_init)
@@ -239,8 +290,7 @@ def evalSolver(individual, games=50):
     end = timeit.default_timer()
     # print(f'time {end - start} sec')
     tree_length = len(individual)
-    return games_won, np.mean(moves_counts), np.mean(tower_progress_list), np.mean(striking_position_list), np.mean(
-        possible_moves_list), np.mean(possible_striking_list)
+    return games_won, np.mean(moves_counts), np.mean(tower_progress_list), np.mean(striking_position_list)
     # return games_won, np.mean(moves_counts)
 
 
@@ -253,25 +303,25 @@ def get_stats(board, max_steps_num, moves_count, moves_counts, possible_moves_li
     if res == max_player:
         games_won += 1
         moves_counts.append(2 - moves_count / max_steps_num)
-        tower_progress_list.append(2 + tower_progress_agent.evaluate_game(board, max_player))
-        striking_position_list.append(2 + striking_position_agent.evaluate_game(board, max_player))
-        possible_moves_list.append(2 + possible_moves_agent.evaluate_game(board, max_player))
-        possible_striking_list.append(25)
+        tower_progress_list.append(towerProgressEval(board, max_player))
+        striking_position_list.append(strikingPossitionEval(board, max_player))
+        possible_moves_list.append(possibleMovesEval(board, max_player))
+        # possible_striking_list.append(25)
 
     elif res is None:
         games_tie += 1
         moves_counts.append(moves_count / max_steps_num)
-        tower_progress_list.append(tower_progress_agent.evaluate_game(board, max_player))
-        striking_position_list.append(striking_position_agent.evaluate_game(board, max_player))
-        possible_moves_list.append(possible_moves_agent.evaluate_game(board, max_player))
-        possible_striking_list.append(possible_striking_agent.evaluate_game(board, max_player))
+        tower_progress_list.append(towerProgressEval(board, max_player))
+        striking_position_list.append(strikingPossitionEval(board, max_player))
+        possible_moves_list.append(possibleMovesEval(board, max_player))
+        # possible_striking_list.append(possible_striking_agent.evaluate_game(board, max_player))
     else:
         games_lost += 1
         moves_counts.append(moves_count / max_steps_num)
-        tower_progress_list.append(tower_progress_agent.evaluate_game(board, max_player))
-        striking_position_list.append(striking_position_agent.evaluate_game(board, max_player))
-        possible_moves_list.append(possible_moves_agent.evaluate_game(board, max_player))
-        possible_striking_list.append(possible_striking_agent.evaluate_game(board, max_player))
+        tower_progress_list.append(towerProgressEval(board, max_player))
+        striking_position_list.append(strikingPossitionEval(board, max_player))
+        possible_moves_list.append(possibleMovesEval(board, max_player))
+        # possible_striking_list.append(possible_striking_agent.evaluate_game(board, max_player))
     return games_lost, games_tie, games_won
 
 
@@ -377,7 +427,11 @@ pset = gp.PrimitiveSetTyped("main", [Kamisado, tuple], float)
 # pset.addPrimitive(striking_position_eval, [Kamisado, Player], float)
 # pset.addPrimitive(possible_position_eval, [Kamisado, Player], float)
 pset.addPrimitive(moveTower, [Kamisado, tuple], Kamisado)
-pset.addPrimitive(getTotalTowerProgress, [Kamisado], float)
+pset.addPrimitive(getTowerPassHafe, [Kamisado], float)
+pset.addPrimitive(getOpenEndPostionsCount, [Kamisado], float)
+pset.addPrimitive(getStrikingPositionFrec, [Kamisado], float)
+pset.addPrimitive(getTowerProgressFrec, [Kamisado], float)
+pset.addPrimitive(getPossiblePossitionFrec, [Kamisado], float)
 pset.addPrimitive(getMoveTowerProgress, [Kamisado, tuple], float)
 pset.addPrimitive(moveSrikingPositionCount, [Kamisado, tuple], float)
 pset.addPrimitive(getPossibleMovesCount, [Kamisado], float)
@@ -403,12 +457,12 @@ pset.addPrimitive(operator.neg, [float], float)
 
 pset.addTerminal(True, bool)
 pset.addTerminal(False, bool)
-pset.addTerminal(Player.WHITE.value, Player)
-pset.addTerminal(Player.BLACK.value, Player)
+# pset.addTerminal(Player.WHITE.value, Player)
+# pset.addTerminal(Player.BLACK.value, Player)
 pset.addTerminal([], list)
 # pset.addTerminal((), tuple)
 for i in range(11):
-    pset.addTerminal(i / 10, float)
+    # pset.addTerminal(i / 10, float)
     pset.addTerminal(i, float)
 pset.addTerminal(100, float)
 pset.addTerminal(-100, float)
@@ -416,14 +470,14 @@ pset.renameArguments(ARG0="Board")
 pset.renameArguments(ARG1="move_tuple")
 # pset.addTerminal(Kamisado(), Kamisado)
 
-creator.create("FitnessMax", base.Fitness, weights=(10.0, 0.5, 1.0, 1.0, 1.0, 1.0))
+creator.create("FitnessMax", base.Fitness, weights=(2.0, 3.0, 0.5, 1.0))
 # creator.create("FitnessMax", base.Fitness, weights=(10.0, 0.5))
 creator.create("Individual", gp.PrimitiveTree, fitness=creator.FitnessMax)
 
 toolbox = base.Toolbox()
 
-max_tree_length = 30
-toolbox.register("expr", gp.genHalfAndHalf, pset=pset, min_=3, max_=10)
+max_tree_length = 10
+toolbox.register("expr", gp.genFull, pset=pset, min_=4, max_=7)
 toolbox.register("individual", tools.initIterate, creator.Individual, toolbox.expr)
 toolbox.register("population", tools.initRepeat, list, toolbox.individual)
 toolbox.register("compile", gp.compile, pset=pset)
@@ -431,7 +485,7 @@ toolbox.register("evaluate", evalSolver)
 # toolbox.register("select", selAgentTournament, tournsize=5)
 toolbox.register("select", tools.selTournament, tournsize=4)
 toolbox.register("mate", gp.cxOnePoint)
-toolbox.register("expr_mut", gp.genHalfAndHalf, min_=1, max_=7)
+toolbox.register("expr_mut", gp.genHalfAndHalf, min_=1, max_=4)
 toolbox.register("mutate", gp.mutUniform, expr=toolbox.expr_mut, pset=pset)
 
 toolbox.decorate("mate", gp.staticLimit(key=operator.attrgetter("height"), max_value=max_tree_length))
@@ -442,16 +496,16 @@ games_won = tools.Statistics(lambda ind: ind.fitness.values[0])
 move_count_mean = tools.Statistics(lambda ind: ind.fitness.values[1])
 progress_mean = tools.Statistics(lambda ind: ind.fitness.values[2])
 strike_mean = tools.Statistics(lambda ind: ind.fitness.values[3])
-possible_moves_mean = tools.Statistics(lambda ind: ind.fitness.values[4])
-striking_possible_mean = tools.Statistics(lambda ind: ind.fitness.values[5])
+# possible_moves_mean = tools.Statistics(lambda ind: ind.fitness.values[4])
+# striking_possible_mean = tools.Statistics(lambda ind: ind.fitness.values[5])
 mstats = tools.MultiStatistics(games_won=games_won, move_count_mean=move_count_mean, progress_mean=progress_mean,
-                               strike_mean=strike_mean, possible_moves_mean=possible_moves_mean,
-                               striking_possible_mean=striking_possible_mean)
+                               strike_mean=strike_mean,
+                               )
 # mstats = tools.MultiStatistics(games_won=games_won, move_count_mean=move_count_mean)
 # mstats = wins_stats
 mstats.register("Avg", np.mean)
 mstats.register("Std", np.std)
-# mstats.register("Median", np.median)
+mstats.register("Median", np.median)
 mstats.register("Min", np.min)
 mstats.register("Max", np.max)
 
@@ -459,11 +513,12 @@ pop_size = 100
 pop = toolbox.population(n=pop_size)
 hof = tools.HallOfFame(1)
 
-games_count = 5
+games_count = 1
 cxpb = 0.7
 mutpb = 0.01
-ngen = 100
-print(f'pop{pop_size}_gen{ngen}_cxpb{cxpb}_mutpb{mutpb}_max{max_tree_length}')
+ngen = 300
+experiment_name = f'pop{pop_size}_gen{ngen}_cxpb{cxpb}_mutpb{mutpb}_max{max_tree_length}'
+print(experiment_name)
 pop, logbook = algorithms.eaSimple(pop, toolbox, cxpb, mutpb, ngen, stats=mstats,
                                    halloffame=hof, verbose=True)
 print(hof[0])
@@ -472,12 +527,33 @@ output_path = 'data/'
 if not os.path.exists(output_path):
     os.makedirs(output_path)
 
-# [popolaation_size, cx_p, mut_p, gen, max_tree_length,seed]
+import matplotlib.pyplot as plt
 
-# tower_progress_agent = TowerProgressAgent()
-# striking_position_agent = StrikingPositionAgent()
-# possible_moves_agent = PossibleMovesAgent()
+fig, ax = plt.subplots(nrows=1, ncols=4, figsize=(40, 8))
+for idx, statistics in enumerate(
+        ['games_won', 'move_count_mean', 'progress_mean', 'strike_mean']):
+    gen = logbook.select("gen")
+    fit_mins = logbook.chapters[statistics].select("Min")
+    fit_avgs = logbook.chapters[statistics].select("Avg")
+    fit_maxs = logbook.chapters[statistics].select("Max")
+    fit_medians = logbook.chapters[statistics].select("Median")
+    ax[idx].plot(gen, fit_mins, "b-", label="Minimum Fitness")
+    ax[idx].plot(gen, fit_avgs, "r-", label="Average Fitness")
+    ax[idx].plot(gen, fit_maxs, "g-", label="Max Fitness")
+    ax[idx].plot(gen, fit_medians, "y-", label="Median Fitness")
+    ax[idx].set_xlabel("Generation", fontsize=18)
+    ax[idx].tick_params(labelsize=16)
+    ax[idx].set_ylabel(f"{statistics}", color="b", fontsize=18)
+    ax[idx].legend(loc="lower right", fontsize=14)
+    ax[idx].set_title(f'Kamisado agents performance on {statistics}', fontsize=18)
 
+try:
+    plt.savefig(f'{experiment_name}.png', dpi=fig.dpi)
+except Exception as e:
+    print(e)
+plt.show()
+
+# exit(1)
 p1_move = get_playe_move_from_policy(hof[0])
 print(evalSolver(hof[0]))
 
@@ -528,7 +604,7 @@ train_df.to_csv(os.path.join(output_path, file_name))
 
 test_rows = []
 print('############################Test Data###################################')
-for j in range(10):
+for j in range(100):
     row = []
     init_board = list(range(8))
     random.shuffle(init_board)

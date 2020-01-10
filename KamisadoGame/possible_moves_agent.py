@@ -9,11 +9,12 @@ class PossibleMovesAgent(MinMaxAgent):
         new_board = board.clone()
         new_board.tower_can_play = ["Brown", "Green", "Red", "Yellow", "Pink", "Purple", "Blue", "Orange"]
         new_board.current_player = Player.WHITE
-        white_possible_sum = sum([len(possible_moves) for tower, possible_moves in new_board.get_possible_moves().items()])
+        white_possible_sum = len(new_board.getPossibleMovesTuples())
 
         new_board = board.clone()
+        new_board.tower_can_play = ["Brown", "Green", "Red", "Yellow", "Pink", "Purple", "Blue", "Orange"]
         new_board.current_player = Player.BLACK
-        black_possible_sum = sum([len(possible_moves) for tower, possible_moves in new_board.get_possible_moves().items()])
+        black_possible_sum = len(new_board.getPossibleMovesTuples())
         if max_player == Player.WHITE:
             return white_possible_sum - black_possible_sum
         else:
