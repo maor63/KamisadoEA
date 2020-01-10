@@ -1,5 +1,7 @@
 import time
 import timeit
+from multiprocessing import freeze_support
+
 import numpy as np
 
 from KamisadoGame.possible_moves_agent import PossibleMovesAgent
@@ -9,8 +11,8 @@ from KamisadoGame.kamisado import Kamisado, Player
 from KamisadoGame.random_agent import RandomAgent
 from KamisadoGame.striking_position_agent import StrikingPositionAgent
 
-p1 = TowerProgressAgent(0)
-p2 = PossibleStrikingAgent(0)
+p1 = StrikingPositionAgent(0)
+p2 = PossibleMovesAgent(0)
 
 players = [p1, p2]
 times = []
@@ -36,7 +38,7 @@ for j in range(100):
     else:
         score[1] += 1
     end = timeit.default_timer()
-    times.append(end-start)
+    times.append(end - start)
 
 players.reverse()
 for j in range(100):
@@ -60,7 +62,7 @@ for j in range(100):
     else:
         score[1] += 1
     end = timeit.default_timer()
-    times.append(end-start)
+    times.append(end - start)
 print(f'Avg game time {np.mean(times)} sec')
 print(f'Sum game time {np.sum(times)} sec')
 print(score)
