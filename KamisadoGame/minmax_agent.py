@@ -1,4 +1,5 @@
 import random
+import timeit
 from abc import ABC, abstractmethod
 from KamisadoGame.kamisado import Kamisado
 from collections import Counter
@@ -9,9 +10,11 @@ class MinMaxAgent(ABC):
 
     def __init__(self, max_depth=3):
         self._max_depth = max_depth
+        self._play_run_times = []
 
     def play(self, board):
         assert isinstance(board, Kamisado)
+        start = timeit.default_timer()
         towers_possible_moves = board.get_possible_moves()
         moves_estimation_dict = Counter()
         alpha, beta, best = self.MIN, self.MAX, self.MIN
@@ -23,6 +26,8 @@ class MinMaxAgent(ABC):
                 alpha, best, beta = self._eval_max_alpha_beta_best(alpha, best, beta, minimax_val)
 
         tower, move = moves_estimation_dict.most_common(1)[0][0]
+        end = timeit.default_timer()
+        self._play_run_times.append(end - start)
         return tower, move
 
     @abstractmethod

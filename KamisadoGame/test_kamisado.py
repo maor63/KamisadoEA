@@ -1,9 +1,24 @@
 from unittest import TestCase
-
+from collections import defaultdict
 from KamisadoGame.kamisado import Kamisado, Player
 
 
 class TestKamisado(TestCase):
+    # def test_fast_possible_moves_load(self):
+    #     board1 = Kamisado()
+    #     board1.seen_boards_dict = defaultdict(dict)
+    #     pm1 = board1.get_possible_moves()
+    #     self.assertEqual(1, len(board1.seen_boards_dict.keys()))
+    #     board2 = Kamisado()
+    #     pm2 = board2.get_possible_moves()
+    #     self.assertEqual(1, len(board1.seen_boards_dict.keys()))
+    #
+    #     init_board = [2, 0, 1, 6, 4, 7, 5, 3]
+    #     board3 = Kamisado(init_board=init_board)
+    #     pm3 = board3.get_possible_moves()
+    #     self.assertEqual(1, len(board1.seen_boards_dict.keys()))
+    #     self.assertListEqual(pm1['Brown'], pm3['Pink'])
+
     def test_init_kamisado_with_random_board(self):
         board = Kamisado()
         start_black_player_pos = {"Orange": (0, 0), "Blue": (0, 1), "Purple": (0, 2), "Pink": (0, 3),

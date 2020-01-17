@@ -3,6 +3,7 @@ import operator
 import os
 import random
 import timeit
+from _operator import attrgetter
 from collections import Counter, defaultdict
 import numpy
 from itertools import chain, combinations
@@ -68,11 +69,15 @@ def moveSrikingPositionCount(board, move_tuple):
     if move_tuple:
         new_board = board.move_tower(*move_tuple)
         new_board.current_player = board.current_player
-        possible_moves = new_board.getPossibleMovesTuples()
-        possible_moves = [(tower, move) for (tower, move) in possible_moves if move is not None]
-        return len(get_win_moves(possible_moves))
+        return get_board_striking_count(new_board)
     else:
         return 0
+
+
+def get_board_striking_count(new_board):
+    possible_moves = new_board.getPossibleMovesTuples()
+    possible_moves = [(tower, move) for (tower, move) in possible_moves if move is not None]
+    return len(get_win_moves(possible_moves))
 
 
 def getTowerPassHafe(board):
@@ -89,9 +94,22 @@ def getTowerPassHafe(board):
     return tower_progress
 
 
-def getMoveTowerProgress(board, move_tuple):
+def evalSideMove(board, move_tuple):
     assert isinstance(board, Kamisado)
-    tower_places = np.zeros((8, 8))
+    player = board.current_player
+    if move_tuple[1] is None:
+        move_tuple = (move_tuple[0], board.players_pos[player][move_tuple[0]])
+    tower_y, tower_x = move_tuple[1]
+    current_y, current_x = board.players_pos[player][move_tuple[0]]
+    return tower_x - current_x
+
+
+def isDiagonalMove(board, move_tuple):
+    return evalSideMove(board, move_tuple) != 0
+
+
+def getMoveDistanceFromStart(board, move_tuple):
+    assert isinstance(board, Kamisado)
     player = board.current_player
     if move_tuple[1] is None:
         move_tuple = (move_tuple[0], board.players_pos[player][move_tuple[0]])
@@ -101,6 +119,63 @@ def getMoveTowerProgress(board, move_tuple):
     else:
         tower_progress_frec = tower_y
     return tower_progress_frec
+
+
+def getMoveDistanceFromMid(board, move_tuple):
+    assert isinstance(board, Kamisado)
+    player = board.current_player
+    if move_tuple[1] is None:
+        move_tuple = (move_tuple[0], board.players_pos[player][move_tuple[0]])
+    tower, (tower_y, tower_x) = move_tuple
+    tower_progress_frec = abs(3 - tower_y)
+    return tower_progress_frec
+
+
+def isBlockStrikeMove(board, move_tuple):
+    assert isinstance(board, Kamisado)
+    new_board = board.clone()
+    opponent = Player.WHITE if board.current_player != Player.WHITE else Player.BLACK
+    new_board.current_player = opponent
+    before = get_board_striking_count(new_board)
+
+    new_board = board.move_tower(*move_tuple)
+    new_board.current_player = opponent
+    after = get_board_striking_count(board)
+    return after < before
+
+
+def isDoubleMove(board, move_tuple):
+    assert isinstance(board, Kamisado)
+    new_board = board.move_tower(*move_tuple)
+    tower, move = new_board.getPossibleMovesTuples()[0]
+    return move is None
+
+
+def neighborBlockCount(board, move_tuple):
+    assert isinstance(board, Kamisado)
+    player = board.current_player
+    if move_tuple[1] is None:
+        move_tuple = (move_tuple[0], board.players_pos[player][move_tuple[0]])
+    tower, (tower_y, tower_x) = move_tuple
+    if Player.WHITE == player:
+        front = [(tower_y - 1, tower_x + 1), (tower_y - 1, tower_x), (tower_y - 1, tower_x - 1)]
+    else:
+        front = [(tower_y + 1, tower_x + 1), (tower_y + 1, tower_x), (tower_y + 1, tower_x - 1)]
+    blocks = sum(map(board.is_legal_move, front))
+    return blocks
+
+
+def evalBlockStrikeStatusOfMove(board, move_tuple):
+    assert isinstance(board, Kamisado)
+    new_board = board.clone()
+    opponent = Player.WHITE if board.current_player != Player.WHITE else Player.BLACK
+    new_board.current_player = opponent
+    before = get_board_striking_count(new_board)
+
+    new_board = board.move_tower(*move_tuple)
+    new_board.current_player = opponent
+    after = get_board_striking_count(board)
+    return before - after
 
 
 def getPossibleMovesCount(board):
@@ -134,16 +209,16 @@ def isLostMove(board, move_tuple):
     if move_tuple:
         tower, move = move_tuple
         new_board = board.move_tower(tower, move)
-        return -1000 if isThereWinMove(new_board.getPossibleMovesTuples()) else 0
+        return True if isThereWinMove(new_board.getPossibleMovesTuples()) else False
     else:
         return 0
 
 
 def isWinMove(move_tuple):
     if move_tuple:
-        return 1000 if isThereWinMove([move_tuple]) else 0
+        return True if isThereWinMove([move_tuple]) else False
     else:
-        return 0
+        return False
 
 
 def isWinOrLoseMove(board, move_tuple):
@@ -236,6 +311,19 @@ def kamisado_simulator(p1_play_move, p2_play_move, max_steps_num=10000, init_boa
     return board, i
 
 
+generations = 0
+
+
+def selTournament(individuals, k, tournsize, fit_attr="fitness"):
+    global generations
+    chosen = []
+    for i in range(k):
+        aspirants = selRandom(individuals, tournsize)
+        chosen.append(max(aspirants, key=attrgetter(fit_attr)))
+    generations += 1
+    return chosen
+
+
 def evalSolver(individual, games=50):
     start = timeit.default_timer()
     gp_policy = toolbox.compile(expr=individual)
@@ -249,24 +337,13 @@ def evalSolver(individual, games=50):
     possible_moves_list = []
     possible_striking_list = []
     max_steps_num = 100
-    # for i in range(5):
-    #     p2_play = random_player.play
-    #     board, moves_count = kamisado_simulator(ea_play_move, p2_play, max_steps_num)
-    #     games_lost, games_tie, games_won1 = get_stats(board, max_steps_num, moves_count, moves_counts,
-    #                                                   possible_moves_list, striking_position_list, tower_progress_list,
-    #                                                   Player.WHITE)
-    #
-    #     board, moves_count = kamisado_simulator(p2_play, ea_play_move, max_steps_num)
-    #     res = board.is_game_won()
-    #     games_lost, games_tie, games_won2 = get_stats(board, max_steps_num, moves_count, moves_counts,
-    #                                                   possible_moves_list, striking_position_list, tower_progress_list,
-    #                                                   Player.BLACK)
-    #     games_won += games_won1 + games_won2
+    random_board = list(random.sample(range(8), 8))
 
-    for board_init in [None, [3, 5, 2, 6, 1, 7, 0, 4], [0, 2, 4, 6, 1, 3, 5, 7]]:
-        tower_progress_agent = TowerProgressAgent(0)
-        striking_position_agent = StrikingPositionAgent(0)
-        possible_moves_agent = PossibleMovesAgent(0)
+    for board_init in [None, [3, 5, 2, 6, 1, 7, 0, 4]]:
+        d = min(generations // 100, 1)
+        tower_progress_agent = TowerProgressAgent(d)
+        striking_position_agent = StrikingPositionAgent(d)
+        possible_moves_agent = PossibleMovesAgent(d)
         # possible_striking_agent = PossibleStrikingAgent(0)
         for agent in [random_player, tower_progress_agent, striking_position_agent, possible_moves_agent]:
             # for agent in [tower_progress_agent]:
@@ -288,7 +365,12 @@ def evalSolver(individual, games=50):
     end = timeit.default_timer()
     # print(f'time {end - start} sec')
     tree_length = len(individual)
-    return games_won, np.mean(moves_counts), np.mean(tower_progress_list), np.mean(striking_position_list)
+    depth_mult = 0.8
+    return games_won * (1 + depth_mult * d), np.mean(moves_counts) * (1 + depth_mult * d), np.mean(
+        tower_progress_list) * (
+                   1 + depth_mult * d), np.mean(striking_position_list) * (1 + depth_mult * d)
+    # depth_mult = 0.8
+    # return games_won * (1 + depth_mult * d), np.mean(moves_counts) * (1 + depth_mult * d)
     # return games_won, np.mean(moves_counts)
 
 
@@ -300,26 +382,18 @@ def get_stats(board, max_steps_num, moves_count, moves_counts, possible_moves_li
     res = board.is_game_won()
     if res == max_player:
         games_won += 1
-        moves_counts.append(2 - moves_count / max_steps_num)
-        tower_progress_list.append(towerProgressEval(board, max_player))
-        striking_position_list.append(strikingPossitionEval(board, max_player))
-        possible_moves_list.append(possibleMovesEval(board, max_player))
-        # possible_striking_list.append(25)
+        moves_counts.append(2.3 - moves_count / max_steps_num)
 
     elif res is None:
         games_tie += 1
-        moves_counts.append(moves_count / max_steps_num)
-        tower_progress_list.append(towerProgressEval(board, max_player))
-        striking_position_list.append(strikingPossitionEval(board, max_player))
-        possible_moves_list.append(possibleMovesEval(board, max_player))
-        # possible_striking_list.append(possible_striking_agent.evaluate_game(board, max_player))
+        moves_counts.append(1 + moves_count / max_steps_num)
     else:
         games_lost += 1
-        moves_counts.append(moves_count / max_steps_num)
-        tower_progress_list.append(towerProgressEval(board, max_player))
-        striking_position_list.append(strikingPossitionEval(board, max_player))
-        possible_moves_list.append(possibleMovesEval(board, max_player))
-        # possible_striking_list.append(possible_striking_agent.evaluate_game(board, max_player))
+        moves_counts.append(1 + moves_count / max_steps_num)
+    tower_progress_list.append(1 + towerProgressEval(board, max_player))
+    striking_position_list.append(1 + strikingPossitionEval(board, max_player))
+    possible_moves_list.append(1 + possibleMovesEval(board, max_player))
+    # possible_striking_list.append(possible_striking_agent.evaluate_game(board, max_player))
     return games_lost, games_tie, games_won
 
 
@@ -418,27 +492,23 @@ def possible_position_eval(board, player):
 
 
 pset = gp.PrimitiveSetTyped("main", [Kamisado, tuple], float)
-# pset.addPrimitive(getBoard, [Kamisado], Kamisado)
-# pset.addPrimitive(getCurrentPlayer, [Kamisado], Player)
-# pset.addPrimitive(getOtherPlayer, [Kamisado], Player)
-# pset.addPrimitive(tower_progress_eval, [Kamisado, Player], float)
-# pset.addPrimitive(striking_position_eval, [Kamisado, Player], float)
-# pset.addPrimitive(possible_position_eval, [Kamisado, Player], float)
+pset.addPrimitive(getBoard, [Kamisado], Kamisado)
 pset.addPrimitive(moveTower, [Kamisado, tuple], Kamisado)
-pset.addPrimitive(getTowerPassHafe, [Kamisado], float)
-pset.addPrimitive(getStrikingPositionFrec, [Kamisado], float)
-pset.addPrimitive(getOpenEndPostionsCount, [Kamisado], float)
-pset.addPrimitive(getTowerProgressFrec, [Kamisado], float)
-pset.addPrimitive(getPossiblePossitionFrec, [Kamisado], float)
-pset.addPrimitive(getMoveTowerProgress, [Kamisado, tuple], float)
+pset.addPrimitive(getMoveDistanceFromStart, [Kamisado, tuple], float)
+pset.addPrimitive(getMoveDistanceFromMid, [Kamisado, tuple], float)
+pset.addPrimitive(neighborBlockCount, [Kamisado, tuple], float)
+pset.addPrimitive(evalSideMove, [Kamisado, tuple], float)
+pset.addPrimitive(isDoubleMove, [Kamisado, tuple], bool)
+pset.addPrimitive(isDiagonalMove, [Kamisado, tuple], bool)
 pset.addPrimitive(moveSrikingPositionCount, [Kamisado, tuple], float)
-pset.addPrimitive(getPossibleMovesCount, [Kamisado], float)
 pset.addPrimitive(getEnemyPossibleMovesCount, [Kamisado, tuple], float)
+pset.addPrimitive(evalBlockStrikeStatusOfMove, [Kamisado, tuple], float)
+pset.addPrimitive(isBlockStrikeMove, [Kamisado, tuple], bool)
+pset.addPrimitive(isWinOrLoseMove, [Kamisado, tuple], float)
 pset.addPrimitive(operator.gt, [float, float], bool)
 pset.addPrimitive(operator.le, [float, float], bool)
-pset.addPrimitive(isWinOrLoseMove, [Kamisado, tuple], float)
-# pset.addPrimitive(isLostMove, [Kamisado, tuple], float)
-# pset.addPrimitive(isWinMove, [tuple], float)
+pset.addPrimitive(isLostMove, [Kamisado, tuple], bool)
+pset.addPrimitive(isWinMove, [tuple], bool)
 pset.addPrimitive(getMove, [tuple], tuple)
 pset.addPrimitive(if_then_else, [bool, float, float], float)
 
@@ -468,22 +538,22 @@ pset.renameArguments(ARG0="Board")
 pset.renameArguments(ARG1="move_tuple")
 # pset.addTerminal(Kamisado(), Kamisado)
 
-creator.create("FitnessMax", base.Fitness, weights=(2.0, 1.0, 0.5, 1.0))
+creator.create("FitnessMax", base.Fitness, weights=(1.0, 2.0, 1.0, 1.0))
 # creator.create("FitnessMax", base.Fitness, weights=(10.0, 0.5))
 creator.create("Individual", gp.PrimitiveTree, fitness=creator.FitnessMax)
 
 toolbox = base.Toolbox()
 
 max_tree_length = 7
-toolbox.register("expr", gp.genHalfAndHalf, pset=pset, min_=4, max_=7)
+toolbox.register("expr", gp.genHalfAndHalf, pset=pset, min_=3, max_=max_tree_length)
 toolbox.register("individual", tools.initIterate, creator.Individual, toolbox.expr)
 toolbox.register("population", tools.initRepeat, list, toolbox.individual)
 toolbox.register("compile", gp.compile, pset=pset)
 toolbox.register("evaluate", evalSolver)
 # toolbox.register("select", selAgentTournament, tournsize=5)
-toolbox.register("select", tools.selTournament, tournsize=4)
+toolbox.register("select", selTournament, tournsize=4)
 toolbox.register("mate", gp.cxOnePoint)
-toolbox.register("expr_mut", gp.genHalfAndHalf, min_=1, max_=4)
+toolbox.register("expr_mut", gp.genGrow, min_=1, max_=2)
 toolbox.register("mutate", gp.mutUniform, expr=toolbox.expr_mut, pset=pset)
 
 toolbox.decorate("mate", gp.staticLimit(key=operator.attrgetter("height"), max_value=max_tree_length))
@@ -507,15 +577,15 @@ mstats.register("Median", np.median)
 mstats.register("Min", np.min)
 mstats.register("Max", np.max)
 
-pop_size = 200
+pop_size = 50
 pop = toolbox.population(n=pop_size)
 hof = tools.HallOfFame(1)
 
 games_count = 1
 cxpb = 0.7
-mutpb = 0.01
-ngen = 300
-experiment_name = f'pop{pop_size}_gen{ngen}_cxpb{cxpb}_mutpb{mutpb}_max{max_tree_length}'
+mutpb = 0.05
+ngen = 400
+experiment_name = f'pop{pop_size}_gen{ngen}_cxpb{cxpb}_mutpb{mutpb}_max{max_tree_length}_increase_level'
 print(experiment_name)
 pop, logbook = algorithms.eaSimple(pop, toolbox, cxpb, mutpb, ngen, stats=mstats,
                                    halloffame=hof, verbose=True)
@@ -527,29 +597,30 @@ if not os.path.exists(output_path):
 
 import matplotlib.pyplot as plt
 
-fig, ax = plt.subplots(nrows=1, ncols=4, figsize=(40, 8))
-for idx, statistics in enumerate(
-        ['games_won', 'move_count_mean', 'progress_mean', 'strike_mean']):
-    gen = logbook.select("gen")
-    fit_mins = logbook.chapters[statistics].select("Min")
-    fit_avgs = logbook.chapters[statistics].select("Avg")
-    fit_maxs = logbook.chapters[statistics].select("Max")
-    fit_medians = logbook.chapters[statistics].select("Median")
-    ax[idx].plot(gen, fit_mins, "b-", label="Minimum Fitness")
-    ax[idx].plot(gen, fit_avgs, "r-", label="Average Fitness")
-    ax[idx].plot(gen, fit_maxs, "g-", label="Max Fitness")
-    ax[idx].plot(gen, fit_medians, "y-", label="Median Fitness")
-    ax[idx].set_xlabel("Generation", fontsize=18)
-    ax[idx].tick_params(labelsize=16)
-    ax[idx].set_ylabel(f"{statistics}", color="b", fontsize=18)
-    ax[idx].legend(loc="lower right", fontsize=14)
-    ax[idx].set_title(f'Kamisado agents performance on {statistics}', fontsize=18)
-
+fig, ax = plt.subplots(nrows=1, ncols=2, figsize=(40, 8))
 try:
-    plt.savefig(f'{experiment_name}.png', dpi=fig.dpi)
+    for idx, statistics in enumerate(
+            ['games_won', 'move_count_mean']):
+        gen = logbook.select("gen")
+        fit_mins = logbook.chapters[statistics].select("Min")
+        fit_avgs = logbook.chapters[statistics].select("Avg")
+        fit_maxs = logbook.chapters[statistics].select("Max")
+        fit_medians = logbook.chapters[statistics].select("Median")
+        ax[idx].plot(gen, fit_mins, "b-", label="Minimum Fitness")
+        ax[idx].plot(gen, fit_avgs, "r-", label="Average Fitness")
+        ax[idx].plot(gen, fit_maxs, "g-", label="Max Fitness")
+        ax[idx].plot(gen, fit_medians, "y-", label="Median Fitness")
+        ax[idx].set_xlabel("Generation", fontsize=18)
+        ax[idx].tick_params(labelsize=16)
+        ax[idx].set_ylabel(f"{statistics}", color="b", fontsize=18)
+        ax[idx].legend(loc="lower right", fontsize=14)
+        ax[idx].set_title(f'Kamisado agents performance on {statistics}', fontsize=18)
+
+
 except Exception as e:
     print(e)
 plt.show()
+plt.savefig(f'{experiment_name}.png', dpi=fig.dpi)
 
 # exit(1)
 p1_move = get_playe_move_from_policy(hof[0])
@@ -558,8 +629,8 @@ print(evalSolver(hof[0]))
 cols = ['p1', 'p2', 'win', 'tie', 'lose']
 train_rows = []
 print('############################Train Data###################################')
-
-for board_init in [None, [3, 5, 2, 6, 1, 7, 0, 4], [0, 2, 4, 6, 1, 3, 5, 7], [1, 3, 5, 7, 0, 2, 4, 6]]:
+# , [0, 2, 4, 6, 1, 3, 5, 7], [1, 3, 5, 7, 0, 2, 4, 6]
+for board_init in [None, [3, 5, 2, 6, 1, 7, 0, 4]]:
     print(board_init)
     row = []
     score = get_score_for_two_players(p1_move, p1_move, games_count, init_board=board_init)

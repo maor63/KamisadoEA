@@ -1,6 +1,8 @@
 import random
+import timeit
 from itertools import chain, product
 import dask
+from collections import defaultdict
 from dask.distributed import Client, progress
 import numpy as np
 from enum import Enum
@@ -9,6 +11,9 @@ from enum import Enum
 class Player(Enum):
     WHITE = 0
     BLACK = 1
+
+
+all_towers = ("Brown", "Green", "Red", "Yellow", "Pink", "Purple", "Blue", "Orange")
 
 
 class Kamisado:
@@ -25,8 +30,6 @@ class Kamisado:
 
     def __init__(self, black_player_pos=None, white_player_pos=None, current_player=None, tower_can_play=None,
                  init_board=None):
-        start_towers = ["Brown", "Green", "Red", "Yellow", "Pink", "Purple", "Blue", "Orange"]
-
         if init_board:
             assert len(set(init_board)) == 8
             self.board_layout = self.board_layout[init_board]
@@ -42,10 +45,9 @@ class Kamisado:
         else:
             self.white_player_pos = {color: (7, i) for i, color in enumerate(self.board_layout[7])}
 
-
         self.players_pos = {Player.WHITE: self.white_player_pos, Player.BLACK: self.black_player_pos}
         self.current_player = current_player if current_player else Player.WHITE
-        self.tower_can_play = tower_can_play if tower_can_play else start_towers
+        self.tower_can_play = tower_can_play if tower_can_play else all_towers
         self.tower_pos_set = set(self.black_player_pos.values()) | set(self.white_player_pos.values())
         self.possible_moves_dict = None
         self.possible_moves_tuples = None
@@ -55,22 +57,33 @@ class Kamisado:
         return 0 <= y <= 7 and 0 <= x <= 7 and pos not in self.tower_pos_set
 
     def get_possible_moves(self):
-        if self.possible_moves_dict:
-            return self.possible_moves_dict
-        else:
-            player_pos_dict = self.players_pos[self.current_player]
-            # possible_moves_dict = {}
-            possible_moves_tuples = []
-            for tower in self.tower_can_play:
-                tower_y, tower_x = player_pos_dict[tower]
-                forward_moves = self.generate_forward(tower_x, tower_y)
-                right_moves = self.generate_right(tower_x, tower_y)
-                left_moves = self.generate_left(tower_x, tower_y)
+        if not self.possible_moves_dict:
+            start = timeit.default_timer()
+            possible_moves_dict, _ = self._calc_possible_move_dict()
+            self.possible_moves_dict = possible_moves_dict
+            end = timeit.default_timer()
+            # print(f'get possible moves time {end - start} sec')
+        return self.possible_moves_dict
 
-                possible_moves = self.combine_moves(forward_moves, left_moves, right_moves)
-                possible_moves_tuples.append((tower, possible_moves))
-            self.possible_moves_dict = dict(possible_moves_tuples)
-            return self.possible_moves_dict
+    def _calc_possible_move_dict(self, use_all_towers=False):
+        towers = self.tower_can_play if not use_all_towers else all_towers
+        player_pos_dict = self.players_pos[self.current_player]
+        possible_moves_tuples = []
+        pos_possible_moves_tuples = []
+        for tower in towers:
+            tower_y, tower_x = player_pos_dict[tower]
+            possible_moves = self._generate_possible_moves(tower_x, tower_y)
+            possible_moves_tuples.append((tower, possible_moves))
+            pos_possible_moves_tuples.append(((tower_y, tower_x), possible_moves))
+        possible_moves_dict = dict(possible_moves_tuples)
+        return possible_moves_dict, dict(pos_possible_moves_tuples)
+
+    def _generate_possible_moves(self, tower_x, tower_y):
+        forward_moves = self.generate_forward(tower_x, tower_y)
+        right_moves = self.generate_right(tower_x, tower_y)
+        left_moves = self.generate_left(tower_x, tower_y)
+        possible_moves = self.combine_moves(forward_moves, left_moves, right_moves)
+        return possible_moves
 
     def combine_moves(self, forward_moves, left_moves, right_moves):
         possible_moves = forward_moves + right_moves + left_moves
@@ -79,6 +92,7 @@ class Kamisado:
 
     def getPossibleMovesTuples(self):
         if not self.possible_moves_tuples:
+
             player_possible_moves = self.get_possible_moves()
             possible_moves = []
             for tower, moves in player_possible_moves.items():

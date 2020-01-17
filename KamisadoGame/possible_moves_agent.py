@@ -1,3 +1,5 @@
+import timeit
+
 from KamisadoGame.minmax_agent import MinMaxAgent
 from KamisadoGame.kamisado import Kamisado, Player
 from itertools import chain
