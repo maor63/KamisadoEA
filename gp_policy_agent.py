@@ -319,10 +319,14 @@ generations = 0
 def selTournament(individuals, k, tournsize, fit_attr="fitness"):
     global generations
     chosen = []
-    for i in range(k):
+    t = int(k * 0.8)
+    for i in range(t):
         aspirants = selRandom(individuals, tournsize)
         chosen.append(max(aspirants, key=attrgetter(fit_attr)))
     generations += 1
+    b = k - t
+    best_inds = sorted(individuals, key=attrgetter(fit_attr), reverse=True)[:b]
+    chosen += best_inds
     return chosen
 
 
@@ -340,9 +344,9 @@ def evalSolver(individual, games=50):
     possible_striking_list = []
     max_steps_num = 100
     random_board = list(random.sample(range(8), 8))
-
+    d = 0
     for board_init in [None, [3, 5, 2, 6, 1, 7, 0, 4]]:
-        d = 1
+
         tower_progress_agent = TowerProgressAgent(d)
         striking_position_agent = StrikingPositionAgent(d)
         possible_moves_agent = PossibleMovesAgent(d)
@@ -368,9 +372,7 @@ def evalSolver(individual, games=50):
     # print(f'time {end - start} sec')
     tree_length = len(individual)
     depth_mult = 0
-    return games_won * (1 + depth_mult * d), np.mean(moves_counts) * (1 + depth_mult * d), np.mean(
-        tower_progress_list) * (
-                   1 + depth_mult * d), np.mean(striking_position_list) * (1 + depth_mult * d)
+    return games_won, np.mean(moves_counts)
     # depth_mult = 0.8
     # return games_won * (1 + depth_mult * d), np.mean(moves_counts) * (1 + depth_mult * d)
     # return games_won, np.mean(moves_counts)
@@ -384,7 +386,7 @@ def get_stats(board, max_steps_num, moves_count, moves_counts, possible_moves_li
     res = board.is_game_won()
     if res == max_player:
         games_won += 1
-        moves_counts.append(2.3 - moves_count / max_steps_num)
+        moves_counts.append(2.45 - moves_count / max_steps_num)
 
     elif res is None:
         games_tie += 1
@@ -552,7 +554,7 @@ creator.create("Individual", gp.PrimitiveTree, fitness=creator.FitnessMax)
 
 toolbox = base.Toolbox()
 
-max_tree_length = 30
+max_tree_length = 25
 toolbox.register("expr", gp.genHalfAndHalf, pset=pset, min_=3, max_=max_tree_length)
 toolbox.register("individual", tools.initIterate, creator.Individual, toolbox.expr)
 toolbox.register("population", tools.initRepeat, list, toolbox.individual)
@@ -561,9 +563,8 @@ toolbox.register("evaluate", evalSolver)
 # toolbox.register("select", selAgentTournament, tournsize=5)
 toolbox.register("select", selTournament, tournsize=4)
 toolbox.register("mate", gp.cxOnePoint)
-toolbox.register("expr_mut", gp.genGrow, min_=1, max_=3)
+toolbox.register("expr_mut", gp.genGrow, min_=1, max_=6)
 toolbox.register("mutate", gp.mutUniform, expr=toolbox.expr_mut, pset=pset)
-
 
 toolbox.decorate("mate", gp.staticLimit(key=operator.attrgetter("height"), max_value=max_tree_length))
 toolbox.decorate("mutate", gp.staticLimit(key=operator.attrgetter("height"), max_value=max_tree_length))
@@ -572,15 +573,15 @@ if __name__ == "__main__":
     games_won = tools.Statistics(lambda ind: ind.fitness.values[0])
     # [tower_progress_sum, striking_position_sum, possible_moves_sum]
     move_count_mean = tools.Statistics(lambda ind: ind.fitness.values[1])
-    # progress_mean = tools.Statistics(lambda ind: ind.fitness.values[2])
+    tree_length = tools.Statistics(operator.attrgetter("height"))
     # strike_mean = tools.Statistics(lambda ind: ind.fitness.values[3])
     # possible_moves_mean = tools.Statistics(lambda ind: ind.fitness.values[4])
     # striking_possible_mean = tools.Statistics(lambda ind: ind.fitness.values[5])
     # mstats = tools.MultiStatistics(games_won=games_won, move_count_mean=move_count_mean, progress_mean=progress_mean,
     #                                strike_mean=strike_mean,
     #                                )
-    stats_names = ['games_won', 'move_count_mean']
-    mstats = tools.MultiStatistics(games_won=games_won, move_count_mean=move_count_mean)
+    stats_names = ['games_won', 'move_count_mean', 'tree_length']
+    mstats = tools.MultiStatistics(games_won=games_won, move_count_mean=move_count_mean, tree_length=tree_length)
     # mstats = wins_stats
     mstats.register("Avg", np.mean)
     mstats.register("Std", np.std)
@@ -588,15 +589,15 @@ if __name__ == "__main__":
     mstats.register("Min", np.min)
     mstats.register("Max", np.max)
 
-    pop_size = 1000
+    pop_size = 100
     pop = toolbox.population(n=pop_size)
     hof = tools.HallOfFame(1)
 
     games_count = 1
     cxpb = 0.7
-    mutpb = 0.001
-    ngen = 100
-    experiment_name = f'pop{pop_size}_gen{ngen}_cxpb{cxpb}_mutpb{mutpb}_max{max_tree_length}_increase_level'
+    mutpb = 0.1
+    ngen = 300
+    experiment_name = f'pop{pop_size}_gen{ngen}_cxpb{cxpb}_mutpb{mutpb}_max{max_tree_length}_increase_level_new_fit'
     print(experiment_name)
     print(f'experiment start at: {datetime.now()}')
     pop, logbook = algorithms.eaSimple(pop, toolbox, cxpb, mutpb, ngen, stats=mstats,
@@ -631,8 +632,8 @@ if __name__ == "__main__":
 
     except Exception as e:
         print(e)
-    plt.show()
     plt.savefig(f'{experiment_name}.png', dpi=fig.dpi)
+    plt.show()
 
     # exit(1)
     p1_move = get_playe_move_from_policy(hof[0])

@@ -6,6 +6,8 @@ from itertools import chain
 
 
 class PossibleMovesAgent(MinMaxAgent):
+    name = 'PossibleMovesAgent'
+
     def evaluate_game(self, board, max_player):
         assert isinstance(board, Kamisado)
         new_board = board.clone()

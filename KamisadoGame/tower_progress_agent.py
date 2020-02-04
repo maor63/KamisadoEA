@@ -3,6 +3,7 @@ from KamisadoGame.kamisado import Kamisado, Player
 
 
 class TowerProgressAgent(MinMaxAgent):
+    name = 'TowerProgressAgent'
     def evaluate_game(self, board, max_player):
         assert isinstance(board, Kamisado)
         white_progress_sum = sum([7 - y for tower, (y, x) in board.white_player_pos.items()])

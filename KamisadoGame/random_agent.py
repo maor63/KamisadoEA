@@ -4,6 +4,8 @@ from KamisadoGame.kamisado import Kamisado
 
 
 class RandomAgent:
+    name = 'RandomAgent'
+
     def play(self, board):
         assert isinstance(board, Kamisado)
         tower_moves = board.get_possible_moves()
