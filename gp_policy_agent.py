@@ -9,7 +9,7 @@ from datetime import datetime
 
 import numpy
 from itertools import chain, combinations
-from functools import partial
+from functools import partial, reduce
 import numpy as np
 from deap import algorithms
 from deap import base
@@ -345,7 +345,8 @@ def evalSolver(individual, games=50):
     max_steps_num = 100
     random_board = list(random.sample(range(8), 8))
     d = 0
-    for board_init in [None, [3, 5, 2, 6, 1, 7, 0, 4]]:
+    for board_init in [None, [3, 5, 2, 6, 1, 7, 0, 4], [0, 2, 4, 6, 1, 3, 5, 7]]:
+    # for board_init in [None, [3, 5, 2, 6, 1, 7, 0, 4]]:
 
         tower_progress_agent = TowerProgressAgent(d)
         striking_position_agent = StrikingPositionAgent(d)
@@ -372,9 +373,7 @@ def evalSolver(individual, games=50):
     # print(f'time {end - start} sec')
     tree_length = len(individual)
     depth_mult = 0
-    return games_won, np.mean(moves_counts)
-    # depth_mult = 0.8
-    # return games_won * (1 + depth_mult * d), np.mean(moves_counts) * (1 + depth_mult * d)
+    return games_won, np.mean(moves_counts), np.mean(striking_position_list), np.mean(tower_progress_list)
     # return games_won, np.mean(moves_counts)
 
 
@@ -386,14 +385,17 @@ def get_stats(board, max_steps_num, moves_count, moves_counts, possible_moves_li
     res = board.is_game_won()
     if res == max_player:
         games_won += 1
-        moves_counts.append(2.45 - moves_count / max_steps_num)
+        # moves_counts.append(2.3 - moves_count / max_steps_num)
+        moves_counts.append(2 - moves_count / max_steps_num)
 
     elif res is None:
         games_tie += 1
-        moves_counts.append(1 + moves_count / max_steps_num)
+        # moves_counts.append(1 + moves_count / max_steps_num)
+        moves_counts.append(moves_count / max_steps_num)
     else:
         games_lost += 1
-        moves_counts.append(1 + moves_count / max_steps_num)
+        # moves_counts.append(1 + moves_count / max_steps_num)
+        moves_counts.append(moves_count / max_steps_num)
     tower_progress_list.append(1 + towerProgressEval(board, max_player))
     striking_position_list.append(1 + strikingPossitionEval(board, max_player))
     possible_moves_list.append(1 + possibleMovesEval(board, max_player))
@@ -548,13 +550,14 @@ pset.renameArguments(ARG0="Board")
 pset.renameArguments(ARG1="move_tuple")
 # pset.addTerminal(Kamisado(), Kamisado)
 
-creator.create("FitnessMax", base.Fitness, weights=(1.0, 1.0))
+creator.create("FitnessMax", base.Fitness, weights=(1.0, 1.0, 1.0, 1.0))
+# creator.create("FitnessMax", base.Fitness, weights=(1.0, 1.0))
 # creator.create("FitnessMax", base.Fitness, weights=(10.0, 0.5))
 creator.create("Individual", gp.PrimitiveTree, fitness=creator.FitnessMax)
 
 toolbox = base.Toolbox()
 
-max_tree_length = 25
+max_tree_length = 12
 toolbox.register("expr", gp.genHalfAndHalf, pset=pset, min_=3, max_=max_tree_length)
 toolbox.register("individual", tools.initIterate, creator.Individual, toolbox.expr)
 toolbox.register("population", tools.initRepeat, list, toolbox.individual)
@@ -570,18 +573,30 @@ toolbox.decorate("mate", gp.staticLimit(key=operator.attrgetter("height"), max_v
 toolbox.decorate("mutate", gp.staticLimit(key=operator.attrgetter("height"), max_value=max_tree_length))
 
 if __name__ == "__main__":
+    fit = tools.Statistics(lambda ind: reduce(lambda x, y: x * y, ind.fitness.values))
     games_won = tools.Statistics(lambda ind: ind.fitness.values[0])
     # [tower_progress_sum, striking_position_sum, possible_moves_sum]
-    move_count_mean = tools.Statistics(lambda ind: ind.fitness.values[1])
+    survivability_mean = tools.Statistics(lambda ind: ind.fitness.values[1])
     tree_length = tools.Statistics(operator.attrgetter("height"))
-    # strike_mean = tools.Statistics(lambda ind: ind.fitness.values[3])
-    # possible_moves_mean = tools.Statistics(lambda ind: ind.fitness.values[4])
-    # striking_possible_mean = tools.Statistics(lambda ind: ind.fitness.values[5])
+    strike_mean = tools.Statistics(lambda ind: ind.fitness.values[2])
+    possible_moves_mean = tools.Statistics(lambda ind: ind.fitness.values[3])
     # mstats = tools.MultiStatistics(games_won=games_won, move_count_mean=move_count_mean, progress_mean=progress_mean,
     #                                strike_mean=strike_mean,
     #                                )
-    stats_names = ['games_won', 'move_count_mean', 'tree_length']
-    mstats = tools.MultiStatistics(games_won=games_won, move_count_mean=move_count_mean, tree_length=tree_length)
+    stats_names = ['fit', 'games_won',
+                   'survivability_mean',
+                   'tree_length',
+                   'strike_mean',
+                   'possible_moves_mean'
+                   ]
+    # mstats = tools.MultiStatistics(fit=fit, games_won=games_won, move_count_mean=move_count_mean,
+    #                                tree_length=tree_length, strike_mean=strike_mean, possible_moves_mean=possible_moves_mean)
+    mstats = tools.MultiStatistics(fit=fit, games_won=games_won,
+                                   survivability_mean=survivability_mean,
+                                   tree_length=tree_length,
+                                   strike_mean=strike_mean,
+                                   possible_moves_mean=possible_moves_mean
+                                   )
     # mstats = wins_stats
     mstats.register("Avg", np.mean)
     mstats.register("Std", np.std)
@@ -589,15 +604,15 @@ if __name__ == "__main__":
     mstats.register("Min", np.min)
     mstats.register("Max", np.max)
 
-    pop_size = 100
+    pop_size = 1000
     pop = toolbox.population(n=pop_size)
     hof = tools.HallOfFame(1)
 
     games_count = 1
     cxpb = 0.7
-    mutpb = 0.1
-    ngen = 300
-    experiment_name = f'pop{pop_size}_gen{ngen}_cxpb{cxpb}_mutpb{mutpb}_max{max_tree_length}_increase_level_new_fit'
+    mutpb = 0.01
+    ngen = 100
+    experiment_name = f'pop{pop_size}_gen{ngen}_cxpb{cxpb}_mutpb{mutpb}_max{max_tree_length}_increase_level_for_report_fit2_v2'
     print(experiment_name)
     print(f'experiment start at: {datetime.now()}')
     pop, logbook = algorithms.eaSimple(pop, toolbox, cxpb, mutpb, ngen, stats=mstats,
@@ -611,7 +626,7 @@ if __name__ == "__main__":
 
     import matplotlib.pyplot as plt
 
-    fig, ax = plt.subplots(nrows=1, ncols=len(stats_names), figsize=(40, 8))
+    fig, ax = plt.subplots(nrows=1, ncols=len(stats_names), figsize=(50, 8))
     try:
         for idx, statistics in enumerate(stats_names):
             gen = logbook.select("gen")
@@ -619,15 +634,15 @@ if __name__ == "__main__":
             fit_avgs = logbook.chapters[statistics].select("Avg")
             fit_maxs = logbook.chapters[statistics].select("Max")
             fit_medians = logbook.chapters[statistics].select("Median")
-            ax[idx].plot(gen, fit_mins, "b-", label="Minimum Fitness")
-            ax[idx].plot(gen, fit_avgs, "r-", label="Average Fitness")
-            ax[idx].plot(gen, fit_maxs, "g-", label="Max Fitness")
-            ax[idx].plot(gen, fit_medians, "y-", label="Median Fitness")
+            ax[idx].plot(gen, fit_mins, "b-", label="Minimum Ind")
+            ax[idx].plot(gen, fit_avgs, "r-", label="Average Ind")
+            ax[idx].plot(gen, fit_maxs, "g-", label="Max Ind")
+            ax[idx].plot(gen, fit_medians, "y-", label="Median Ind")
             ax[idx].set_xlabel("Generation", fontsize=18)
             ax[idx].tick_params(labelsize=16)
             ax[idx].set_ylabel(f"{statistics}", color="b", fontsize=18)
             ax[idx].legend(loc="lower right", fontsize=14)
-            ax[idx].set_title(f'Kamisado agents performance on {statistics}', fontsize=18)
+            ax[idx].set_title(f'{statistics}', fontsize=18)
 
 
     except Exception as e:
